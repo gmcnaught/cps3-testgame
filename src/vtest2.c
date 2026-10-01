@@ -78,17 +78,47 @@ static void verify(int row, const uint16_t *num, const uint8_t *px, uint32_t n, 
         report(row + 1, "COLOUR", bad, first);
 }
 
+static void cell(uint32_t unit, int c, int r, uint32_t v)
+{
+    cps3v_cell(unit, c, r, v & 0xffff, (v >> 16) & 0x1ff,
+               (v & (1u << 25) ? CPS3V_FLIPX : 0) | (v & (1u << 26) ? CPS3V_FLIPY : 0));
+}
+
+/* column streaming (phases with v2_stream): tilemap 1 shows the 256-column level through unit 5's 64 columns; every
+   level column that the next frame shows (and one beyond) is written into map column (column mod 64) if that map
+   column holds another one */
+static int16_t streamed[64];
+
+static void stream_reset(void)
+{
+    for (int c = 0; c < 64; c++)
+        streamed[c] = -1;
+}
+
+static void stream_to(int x)
+{
+    for (int c = x / 16; c <= (x + CPS3V_W) / 16 + 1 && c < V2_LEVEL_W; c++)
+        if (streamed[c & 63] != c) {
+            for (int r = 0; r < 64; r++)
+                cell(CPS3V_MAP_UNIT(5), c & 63, r, v2_level[r][c]);
+            streamed[c & 63] = (int16_t)c;
+        }
+}
+
+static int stream_x(uint32_t t)
+{
+    return V2_STREAM_PX * (int)(t < V2_STREAM_FRAMES ? t : V2_STREAM_FRAMES);
+}
+
 static void scene_upload(void)
 {
     colours(v2_colours, V2_COLOURS_N, 1);
     tiles(v2_tiles_num, v2_tiles, V2_TILES_N);
-    for (int k = 0; k < 4; k++)
+    cps3v_tiles(V2_TILES_C, v2_tiles_c, V2_TILES_C_N);     /* one call across a bank boundary */
+    for (int k = 0; k < V2_UNITS; k++)
         for (int r = 0; r < 64; r++)
-            for (int c = 0; c < 64; c++) {
-                uint32_t v = v2_maps[k][r * 64 + c];
-                cps3v_cell(CPS3V_MAP_UNIT(k), c, r, v & 0xffff, (v >> 16) & 0x1ff,
-                           (v & (1u << 25) ? CPS3V_FLIPX : 0) | (v & (1u << 26) ? CPS3V_FLIPY : 0));
-            }
+            for (int c = 0; c < 64; c++)
+                cell(CPS3V_MAP_UNIT(k), c, r, v2_maps[k][r * 64 + c]);
     verify(22, v2_tiles_num, v2_tiles, V2_TILES_N, v2_colours, V2_COLOURS_N);
 }
 
@@ -127,8 +157,18 @@ int main(void)
         if (ph >= V2_PHASES)
             ph = V2_PHASES - 1;
         cps3v_vblank();
-        for (int k = 0; k < 4; k++)
-            cps3v_tilemap(k, v2_scroll[ph][k][0], v2_scroll[ph][k][1], CPS3V_MAP_UNIT(k), 1);
+        uint32_t t = frame - (uint32_t)ph * V2_PHASE_FRAMES;  /* frame within the phase */
+        for (int k = 0; k < 4; k++) {
+            int x = v2_scroll[ph][k][0];
+            if (v2_stream[ph] && k == 1)
+                x = stream_x(t);
+            cps3v_tilemap(k, x, v2_scroll[ph][k][1], CPS3V_MAP_UNIT(v2_units[ph][k]), v2_enable[ph][k]);
+        }
+        if (v2_stream[ph]) {                  /* the columns the next frame shows, written during this one */
+            if (t == 0)
+                stream_reset();
+            stream_to(stream_x(t + 1));
+        }
         if (v2_tileset[ph] && !loaded) {      /* the reload, while the display runs */
             tiles(v2_tiles_b_num, v2_tiles_b, V2_TILES_B_N);
             colours(v2_colours_b, V2_COLOURS_B_N, 0);

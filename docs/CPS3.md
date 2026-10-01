@@ -168,16 +168,20 @@ character DMA or palette DMA, so the video model above rests on MAME (and its re
 up to 0x1ff (colour RAM entries up to 0x1ffff); six phases: parallax scrolls, tilemap 3 past the 1024-pixel wrap,
 vertical scrolls of 500, 1000, 1010 and -30, 120 sprites interleaved between the bands (sprites partly off every
 edge), the same split into four main-list records, 600 sprites (more than the 511 entries a sublist holds: two
-main-list records of 511 and 96 entries), and last the 120-sprite scene after the program rewrites part of character
+main-list records of 511 and 96 entries), column streaming (tilemap 1 scrolled 6 px a frame to x 1500 through a
+256-column level, each column written into the 64-column map, unit 5, just before it shows), tilemap 0 switched to
+data unit 6 with tilemap 2 disabled (its band still listed), sprites from 300 tiles uploaded in one `cps3v_tiles` call
+across the bank 5 / 6 boundary plus black masks (a colour code whose colours are all 0), and last the 120-sprite scene after the program rewrites part of character
 RAM and colour RAM while running (and reads both back through the uncached mirror; a difference would show on the text
 layer).
 
 | Check | Result |
 |---|---|
-| MAME 0.289, snapshots in each phase | 7 of 7 phases: 0 of 86,016 pixels differ |
+| MAME 0.289, snapshots in each phase | 10 of 10 phases: 0 of 86,016 pixels differ |
 | jtcps3 (`jtcps3.rbf` 2026-09-24), 16 shots 5 s apart, `tools/vtest_check.py` | Phases 0-4: shots with 0-9 pixels differing (screenshot noise, below) |
+| jtcps3, phases 6-8 (streaming, data unit switch and layer off, one-call upload across banks and black masks; run of 2026-10-01 16:50) | 0-3 pixels differ (screenshot noise). In the same run phases 0-3 had 8-40 differing pixels in every shot, all 256 of them repeating the pixel to their right (the noise below) |
 | jtcps3, phase 5 (600 sprites) | 8,329-8,335 pixels differ; the shots equal the screen composed without the second main-list record (6-8 pixels) |
-| jtcps3, phase 6 (reload) | The screen keeps the old tiles of tilemaps 0 and 3 and of the reloaded sprite tile; the new colours show (shots equal phase 3's screen but for the reloaded colours, 456-533 pixels). The read-back found every rewritten tile and colour equal to what was written |
+| jtcps3, last phase (reload) | The screen keeps the old tiles of tilemaps 0 and 3 and of the reloaded sprite tile; the new colours show (shots equal phase 3's screen but for the reloaded colours, 456-533 pixels). The read-back found every rewritten tile and colour equal to what was written |
 
 Observed on jtcps3, not explained (the jtcps3 HDL was not read):
 

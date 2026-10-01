@@ -38,7 +38,10 @@ compute what that screen must look like, independently of the CPS3's register fo
 | 3 | 120 sprites placed between the layers (some behind layer 2, some between 2 and 3, some in front) | Sprites interleaved with background layers in depth order, sprites cut by every screen edge |
 | 4 | The same picture as phase 3, with the display list split into four pieces | Several main-list records (display-list groups) in one frame |
 | 5 | 600 overlapping sprites | A display list longer than one group can hold (511 entries) |
-| 6 | Phase 3's picture after the program replaces some tiles and colours while running | Reloading graphics between levels. The program also reads the tiles and colours back and prints any mismatch on screen |
+| 6 | A layer scrolling 6 pixels a frame through a level 4 times wider than the tilemap, then stopping | Streaming: the program writes each column of the level into the tilemap just before it scrolls into view, as a game does for a long room |
+| 7 | The back layer switched to a different map in memory; layer 2 switched off | Pointing a layer at another map; turning a layer off |
+| 8 | Large sprites made from tiles uploaded in one go across a 1 MB bank boundary; black bars at the top and bottom | Bulk tile upload across banks; sprites drawn in colours that are all black (a game's screen mask) |
+| 9 | Phase 3's picture after the program replaces some tiles and colours while running | Reloading graphics between levels. The program also reads the tiles and colours back and prints any mismatch on screen |
 
 ### `stest`: sound
 
@@ -64,10 +67,10 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01.
 | Test | MAME | jtcps3 |
 |---|---|---|
 | `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
-| `vtest2` | All 7 phases exact | Phases 0-4 exact. Phase 5: the second display-list group (sprites after the first 511 entries) is not drawn. Phase 6: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
+| `vtest2` | All 10 phases exact | Phases 0-4 and 6-8 correct. Phase 5: the second display-list group (sprites after the first 511 entries) is not drawn. Phase 9: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
 
-"Exact" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
+"Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
 expands 5-bit colours to 8 bits as `v << 3 | v >> 2` (MAME uses `v << 3`), and its picture sits one pixel to the left
 of MAME's.
 
@@ -75,7 +78,8 @@ jtcps3 screenshots also show a few scattered wrong pixels (usually under 20, up 
 in each shot. Nearly all of them repeat the pixel to their right, and they appear even when the program is frozen
 and writes nothing, so they come from jtcps3's video output or the MiSTer scaler's sampling of it on some frames (not
 yet known which), not from the test program. A phase therefore counts as passing on jtcps3 when at least one of its
-screenshots matches exactly.
+screenshots matches exactly; in runs where the shift affects every shot, a phase also counts as correct when every
+differing pixel is such a one-pixel shift.
 
 More detail, and everything measured about the CPS3 video and sound hardware so far: [docs/CPS3.md](docs/CPS3.md).
 
