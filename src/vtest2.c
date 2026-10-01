@@ -129,9 +129,12 @@ static void scene_list(int ph)
         cps3v_band(v2_bands[k][0], v2_bands[k][1], v2_bands[k][2]);
         for (int i = 0; i < V2_SPRITES; i++) {
             const struct v2_sprite *s = &v2_sprites[i];
-            if (s->set == v2_set[ph] && s->slot == k + 1)
-                cps3v_sprite(s->x, s->y, s->w, s->h, s->tile, s->pal,
-                             (s->fx ? CPS3V_FLIPX : 0) | (s->fy ? CPS3V_FLIPY : 0));
+            if (s->set != v2_set[ph] || s->slot != k + 1)
+                continue;
+            if (s->brk)
+                cps3v_group();
+            cps3v_sprite(s->x, s->y, s->w, s->h, s->tile, s->pal,
+                         (s->fx ? CPS3V_FLIPX : 0) | (s->fy ? CPS3V_FLIPY : 0));
         }
         if (v2_groups[ph])
             cps3v_group();

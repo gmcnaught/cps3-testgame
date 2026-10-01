@@ -16,7 +16,7 @@ W, H = 384, 224
 
 def load_expect(d):
     out = []
-    for k in range(len(glob.glob(os.path.join(d, 'expect_[0-9].png')))):
+    for k in range(len(glob.glob(os.path.join(d, 'expect_[0-9]*.png')))):
         im = Image.open(os.path.join(d, f'expect_{k}.png')).convert('RGB')
         out.append(Image.eval(im, lambda v: v | (v >> 5)).tobytes())
     return out

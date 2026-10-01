@@ -168,7 +168,8 @@ character DMA or palette DMA, so the video model above rests on MAME (and its re
 up to 0x1ff (colour RAM entries up to 0x1ffff); six phases: parallax scrolls, tilemap 3 past the 1024-pixel wrap,
 vertical scrolls of 500, 1000, 1010 and -30, 120 sprites interleaved between the bands (sprites partly off every
 edge), the same split into four main-list records, 600 sprites (more than the 511 entries a sublist holds: two
-main-list records of 511 and 96 entries), column streaming (tilemap 1 scrolled 6 px a frame to x 1500 through a
+main-list records of 511 and 96 entries), the same 600 in three records of 200, 200 and 207 entries, 524 sprites in
+records of 10, 511 and 10 entries, column streaming (tilemap 1 scrolled 6 px a frame to x 1500 through a
 256-column level, each column written into the 64-column map, unit 5, just before it shows), tilemap 0 switched to
 data unit 6 with tilemap 2 disabled (its band still listed), sprites from 300 tiles uploaded in one `cps3v_tiles` call
 across the bank 5 / 6 boundary plus black masks (a colour code whose colours are all 0), and last the 120-sprite scene after the program rewrites part of character
@@ -177,7 +178,8 @@ layer).
 
 | Check | Result |
 |---|---|
-| MAME 0.289, snapshots in each phase | 10 of 10 phases: 0 of 86,016 pixels differ |
+| MAME 0.289, snapshots in each phase | 12 of 12 phases: 0 of 86,016 pixels differ |
+| jtcps3, the three long lists (run of 2026-10-01 17:00): screenshots against the screen composed with only the first K sprites | 511 + 96, 200 / 200 / 207 and 10 / 511 / 10 entries: each best at K = 504 (3-5 px, noise), i.e. the first 511 entries of the frame with the 7 band entries; drawing all sprites: 8,303 / 8,305 / 3,077 px; losing only the record after the full one (10 / 511 / 10): 1,581 px |
 | jtcps3 (`jtcps3.rbf` 2026-09-24), 16 shots 5 s apart, `tools/vtest_check.py` | Phases 0-4: shots with 0-9 pixels differing (screenshot noise, below) |
 | jtcps3, phases 6-8 (streaming, data unit switch and layer off, one-call upload across banks and black masks; run of 2026-10-01 16:50) | 0-3 pixels differ (screenshot noise). In the same run phases 0-3 had 8-40 differing pixels in every shot, all 256 of them repeating the pixel to their right (the noise below) |
 | jtcps3, phase 5 (600 sprites) | 8,329-8,335 pixels differ; the shots equal the screen composed without the second main-list record (6-8 pixels) |
@@ -191,9 +193,10 @@ Observed on jtcps3, not explained (the jtcps3 HDL was not read):
 - In one run (the first, before the read-back was added) some tiles written at start-up drew as partly written (the
   first column of a 4x4 sprite, tiles 20,495-20,498, and tiles 32,764-32,767); the three runs after it drew every
   start-up tile correctly. Unknown cause.
-- A display list of two main-list records with 511 and 96 entries draws only the first; four records of about 32
-  entries each draw correctly. Either about 511 entries a frame is a limit, or a record after a full 511-entry
-  sublist is lost: not yet told apart.
+- Only the first 511 display-list entries of a frame are drawn (tilemap bands and sprites alike), however they are
+  split into main-list records: the cut falls at entry 511 with no record full (200 / 200 / 207) and inside a full
+  record (10 / 511 / 10). MAME draws every entry. Whether the real board has such a limit is Unknown: next, the
+  entries per frame real games use (MAME logs of real sets), and the jtcps3 source.
 - Screenshot noise: with the program frozen (`CDEFS=-DFREEZE_AT=1500`: no video writes after frame 1,500, only the
   VBlank acknowledge), shots of the still screen still differ from the expected one by 3-97 scattered single pixels,
   different in each shot. 190 of 193 wrong pixels in 7 frozen shots repeat the pixel to their right (3 the one to

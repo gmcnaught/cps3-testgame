@@ -17,15 +17,19 @@ Phases (PHASE_FRAMES frames each; the program stays in the last):
   4  as 3, the display list split into four main-list records (a new sublist after each band); same screen as 3
   5  600 sprites (1x1, overlapping, list order = depth), more than one sublist holds (511: the 505th sprite starts a
      second main-list record); per-line load well above a game's
-  6  column streaming: tilemap 1 scrolls 6 px a frame for 250 frames (to x 1500, past the 1024-pixel map wrap)
+  6  600 sprites (as 5) in three main-list records of 200, 200 and 207 entries: none full, 607 in all
+  7  524 sprites in three records of 10, 511 (full) and 10 entries: 531 in all. With 6 this tells a limit on entries
+     a frame (6 loses its entries past the limit; 7 loses the end of the full record and all of the third) from a
+     record after a full one being lost (6 complete; 7 loses only the third record)
+  8  column streaming: tilemap 1 scrolls 6 px a frame for 250 frames (to x 1500, past the 1024-pixel map wrap)
      through a 256-column level, the program writing each column into a 64-column map just before it comes into
      view, as a port streams a room wider than the map; then it holds
-  7  tilemap 0 switched to another map in memory (data unit 6; a port's alternative layer), tilemap 2 switched off
+  9  tilemap 0 switched to another map in memory (data unit 6; a port's alternative layer), tilemap 2 switched off
      (its band still in the list: draws nothing)
-  8  sprites from 300 tiles uploaded in one call across a bank boundary (tiles 24,426-24,725, banks 5-6), and black
+  10 sprites from 300 tiles uploaded in one call across a bank boundary (tiles 24,426-24,725, banks 5-6), and black
      masks over the top and bottom 16 lines: sprites in a colour code whose colours are all 0 (black, not
      transparent)
-  9  as 3, after the program reloads part of character RAM (tilemap 0's and 3's tiles, some sprite tiles) and some
+  11 as 3, after the program reloads part of character RAM (tilemap 0's and 3's tiles, some sprite tiles) and some
      colours while running, as a port does between rooms (last: on jtcps3 the reloaded tiles do not show)
 """
 import os
@@ -48,6 +52,8 @@ PHASES = [(S0, 0, 0, {}),
           (S0, 1, 0, {}),
           (S0, 1, 0, {'groups': 1}),
           (S0, 2, 0, {}),
+          (S0, 4, 0, {}),
+          (S0, 5, 0, {}),
           ([(10, 0), (1500, 8), (120, 16), (300, 24)], 0, 0, {'stream': 1, 'units': [0, 5, 2, 3]}),
           (S0, 0, 0, {'units': [6, 1, 2, 3], 'enable': [1, 1, 0, 1]}),
           (S0, 3, 0, {}),
@@ -75,7 +81,8 @@ class Scene:
         self.maps = [[[(0, 0, 0, 0)] * 64 for _ in range(64)] for _ in range(UNITS)]   # (tile, pal, fx, fy)
         self.level = [[(0, 0, 0, 0)] * LEVEL_W for _ in range(64)]                     # streamed into unit 5
         self.tiles_c = []                          # pixels of tiles TILES_C.., uploaded in one call
-        self.sprites = []                          # (set, slot, x, y, w, h, tile, pal, fx, fy); slot: drawn after band slot
+        self.sprites = []                          # (set, slot, x, y, w, h, tile, pal, fx, fy[, brk]); slot: drawn after
+        #                                            band slot; brk 1: a new main-list record starts at this sprite
 
     def put_tile(self, n, f, b=False):
         px = bytes(f(x, y) for y in range(16) for x in range(16))
@@ -195,7 +202,14 @@ def build():
     for i in range(600):
         s.sprites.append((2, 4, (i * 29) % 400 - 8, (i * 17) % 236 - 8, 1, 1, imgs[(1, 1)] if i % 5 else top + (i % 4),
                           SPAL[(i * 5) % 16], i % 2, (i // 2) % 2))
-    # set 3 (phase 8): tiles from the one-call upload (each shows its number's low bits), black masks
+    # sets 4 and 5 (phases 6, 7): set 2's sprites with main-list record breaks. Entries before the first sprite: the
+    # 7 band entries (two each for the 224-line bands, one for the 128-line band)
+    set2 = [sp for sp in s.sprites if sp[0] == 2]
+    for i, sp in enumerate(set2):
+        s.sprites.append((4,) + sp[1:] + (int(i in (193, 393)),))
+    for i, sp in enumerate(set2[:524]):
+        s.sprites.append((5,) + sp[1:] + (int(i in (3, 514)),))
+    # set 3 (phase 10): tiles from the one-call upload (each shows its number's low bits), black masks
     for k in range(300):
         s.tiles_c.append(bytes((255 if x in (0, 15) or y in (0, 15) else
                                 1 + ((k >> (x // 4)) & 1) * 100 + (y // 4) * 30) if k < 296 else 1
@@ -209,7 +223,7 @@ def build():
     return s
 
 
-def compose(s, phase):
+def compose(s, phase, keep=lambda sp: True):
     scrolls, sset, tset, opt = phase
     units = opt.get('units', [0, 1, 2, 3])
     enable = opt.get('enable', [1, 1, 1, 1])
@@ -259,8 +273,9 @@ def compose(s, phase):
 
     for k, b in enumerate(BANDS):
         band(*b)
-        for (st, slot, x, y, w, h, t, p, fx, fy) in s.sprites:
-            if st == sset and slot == k + 1:
+        for sp in s.sprites:
+            st, slot, x, y, w, h, t, p, fx, fy = sp[:10]
+            if st == sset and slot == k + 1 and keep(sp):
                 sprite(x, y, w, h, t, p, fx, fy)
     lut = np.zeros(0x20000, np.uint32)
     for i, c in colours.items():
@@ -328,9 +343,9 @@ def header(s):
         for i in range(0, 256, 64):
             o.append('    ' + ', '.join(str(b) for b in p[i:i + 64]) + ',')
     o.append('};')
-    o.append('struct v2_sprite { uint8_t set, slot; int16_t x, y; uint8_t w, h; uint16_t tile, pal; uint8_t fx, fy; };')
+    o.append('struct v2_sprite { uint8_t set, slot; int16_t x, y; uint8_t w, h; uint16_t tile, pal; uint8_t fx, fy, brk; };')
     o.append('static const struct v2_sprite v2_sprites[V2_SPRITES] = {')
-    o += [f'    {{{st}, {sl}, {x}, {y}, {w}, {h}, {t}, {p}, {fx}, {fy}}},' for st, sl, x, y, w, h, t, p, fx, fy in s.sprites]
+    o += [f'    {{{", ".join(str(v) for v in (sp + (0,))[:11])}}},' for sp in s.sprites]
     o.append('};')
     return '\n'.join(o) + '\n'
 
