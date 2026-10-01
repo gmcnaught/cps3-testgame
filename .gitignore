@@ -1,0 +1,4 @@
+build/
+roms/
+__pycache__/
+*.pyc
