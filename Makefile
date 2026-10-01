@@ -1,21 +1,28 @@
-# CPS3 test game (src/vtest.c, src/cps3v.c; scene and expected screens from tools/vtest.py), run from SIMM 1 as
-# the games are. Builds in the cps3-dev container (docker/Dockerfile):
-#   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make
-# Output: $(B)/mame/redearthn/ (a MAME stand-in set), $(B)/expect_<phase>.png (the screens it should show).
-# scripts/cps3_vtest.sh checks it in MAME, scripts/mister_run.sh + tools/vtest_check.py on jtcps3.
-B ?= build
+# CPS3 test programs, each run from SIMM 1 as the games are:
+#   vtest   video: colours, tiles, two tilemaps, sprites of every size and flip (src/vtest.c, tools/vtest.py)
+#   vtest2  video as a port uses it: four tilemaps (parallax), vertical scroll, character RAM banks and reloads,
+#           over 511 sprites, high colour codes (src/vtest2.c, tools/vtest2.py)
+#   stest   sound: the 16 PCM voices (src/stest.c, tools/stest.py)
+# Build in the cps3-dev container (docker/Dockerfile):
+#   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make [vtest|vtest2|stest]
+# Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
+# samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
+PROGS  := vtest vtest2 stest
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -fomit-frame-pointer -Wall -Wextra
 
-all:
-	@mkdir -p $(B)
-	python3 tools/vtest.py $(B)
-	sh-elf-gcc $(CFLAGS) -I$(B) -Isrc -nostartfiles -T src/link_simm.ld -Wl,-Map,$(B)/main.map -o $(B)/main.elf \
-	  src/crt0.S src/vtest.c src/cps3v.c -lgcc
-	sh-elf-objcopy -O binary -j .boot $(B)/main.elf $(B)/main.bin
-	sh-elf-objcopy -O binary -j .text -j .data $(B)/main.elf $(B)/simm1.bin
-	python3 tools/mkcps3.py $(B)/main.bin $(B)/mame $(B)/simm1.bin
+all: $(PROGS)
+
+$(PROGS):
+	@mkdir -p build/$@
+	python3 tools/$@.py build/$@
+	sh-elf-gcc $(CFLAGS) -Ibuild/$@ -Isrc -nostartfiles -T src/link_simm.ld -Wl,-Map,build/$@/main.map \
+	  -o build/$@/main.elf src/crt0.S src/$@.c src/cps3v.c src/cps3s.c -lgcc
+	sh-elf-objcopy -O binary -j .boot build/$@/main.elf build/$@/main.bin
+	sh-elf-objcopy -O binary -j .text -j .data build/$@/main.elf build/$@/simm1.bin
+	python3 tools/mkcps3.py build/$@/main.bin build/$@/mame build/$@/simm1.bin \
+	  $$(test -f build/$@/$@.bin && echo build/$@/$@.bin)
 
 clean:
-	rm -rf $(B)
+	rm -rf build
 
-.PHONY: all clean
+.PHONY: all clean $(PROGS)

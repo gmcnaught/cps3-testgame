@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""A MAME stand-in set for a homebrew CPS3 program: the program as Red Earth's BIOS ROM, encrypted with Red Earth's
-keys (MAME cps3.cpp cps3_mask; the jtcps3 MRA header carries the same keys), and blank SIMMs.
-    mkcps3.py <main.bin> <out_dir> [simm1.bin]      -> <out_dir>/redearthn/*
+"""A MAME stand-in set for a homebrew CPS3 program: Street Fighter III 3rd Strike (Asia, NO CD), the CPS3 set with the
+most flash (SIMMs 1-2 program, 3-6 graphics and samples, 64 MB). The program as its BIOS ROM, encrypted with its keys
+(MAME cps3.cpp cps3_mask, init_sfiii3; the jtcps3 MRA header carries the same keys); blank SIMMs otherwise.
+    mkcps3.py <main.bin> <out_dir> [simm1.bin [user5.bin]]      -> <out_dir>/sfiii3na/*
 simm1.bin (the program at 0x06000000) goes to SIMM 1: encrypted for its addresses, byte k of each 32-bit word in
-file simm1.k (MAME cps3.cpp copy_from_nvram).
+file simm1.k (MAME cps3.cpp copy_from_nvram). user5.bin (sound samples, e.g. tools/stest.py's) goes to SIMM 3 onward, as MAME
+builds its user5 region from them: per pair of chips (2j, 2j + 1), 4 MB of it, byte 4w + 0 / 1 / 2 / 3 =
+chip 2j + 1 byte 2w, chip 2j byte 2w, chip 2j + 1 byte 2w + 1, chip 2j byte 2w + 1.
 """
 import os
 import struct
 import sys
 
-KEY1, KEY2 = 0x9e300ab1, 0xa175b82c
-SET = 'redearthn'
-BIOS = 'redearth_asia_nocd.29f400.u2'
-SIMMS = [f'redearth-simm1.{k}' for k in range(4)] + [f'redearth-simm3.{k}' for k in range(8)] + \
-        [f'redearth-simm4.{k}' for k in range(8)] + [f'redearth-simm5.{k}' for k in range(2)]
+KEY1, KEY2 = 0xa55432b4, 0x0c129981
+SET = 'sfiii3na'
+BIOS = 'sfiii3_asia_nocd.29f400.u2'
+SIMMS = [f'sfiii3-simm{n}.{k}' for n in (1, 2) for k in range(4)] + \
+        [f'sfiii3-simm{n}.{k}' for n in (3, 4, 5, 6) for k in range(8)]
+USER5 = [f'sfiii3-simm{n}.{k}' for n in (3, 4, 5, 6) for k in range(8)]   # MAME's order
 
 
 def rol16(v, n):
@@ -56,13 +60,21 @@ def main():
         img = open(sys.argv[3], 'rb').read()
         img = encrypt(img.ljust(0x800000, b'\xff')[:0x800000], 0x6000000)
         simm1 = [img[k::4] for k in range(4)]
+    chips = {}
+    if simm1:
+        chips.update({f'sfiii3-simm1.{k}': simm1[k] for k in range(4)})
+    if len(sys.argv) > 4:
+        u5 = open(sys.argv[4], 'rb').read()
+        if len(u5) > 0x200000 * len(USER5):
+            sys.exit(f'{sys.argv[4]}: {len(u5)} bytes, SIMMs 3-6 hold {0x200000 * len(USER5)}')
+        for j in range(0, (len(u5) + 0x3fffff) // 0x400000):
+            seg = u5[j * 0x400000:(j + 1) * 0x400000].ljust(0x400000, b'\xff')
+            chips[USER5[2 * j]] = seg[1::2]
+            chips[USER5[2 * j + 1]] = seg[0::2]
     for s in SIMMS:
-        p = os.path.join(d, s)
-        if simm1 and s.startswith('redearth-simm1.'):
-            open(p, 'wb').write(simm1[int(s[-1])])
-        else:
-            open(p, 'wb').write(b'\xff' * 0x200000)
-    print(f'{d}: program {len(open(prog, "rb").read())} bytes')
+        open(os.path.join(d, s), 'wb').write(chips.get(s, b'\xff' * 0x200000))
+    print(f'{d}: program {len(open(prog, "rb").read())} bytes' +
+          (f', samples {len(u5)} bytes' if len(sys.argv) > 4 else ''))
 
 
 if __name__ == '__main__':

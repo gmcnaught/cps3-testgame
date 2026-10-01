@@ -1,14 +1,18 @@
 # CPS3 / jtcps3 hardware notes
 
-Measured on MAME 0.289 (`cps3` driver, stand-in set `redearthn`) and a MiSTer running `jtcps3.rbf` (file date
-2026-09-24, beta, release build), unless marked inferred. Written while porting a game to the CPS3; the test game in
-this repo (`src/vtest.c`) is the program behind the "Video test" section.
+Measured on MAME 0.289 (`cps3` driver) and a MiSTer running `jtcps3.rbf` (file date 2026-09-24, beta, release build),
+unless marked inferred. Written while porting a game to the CPS3; the programs in this repo (`src/vtest.c`,
+`vtest2.c`, `stest.c`) are behind the "Video test", "Video test 2" and "Sound" sections.
 
 ## Booting our own program on jtcps3
 
-- Set: Red Earth (Asia, NO CD) layout and keys (`9e300ab1` / `a175b82c`, in the MRA header); `tools/mkcps3.py`
-  encrypts (MAME `cps3_mask`; checked: re-encrypting the decrypted Capcom BIOS gives the original bytes),
-  `tools/mkmra3.py` writes the MRA (needs the user's `jtbeta.zip`).
+- Set: Street Fighter III 3rd Strike (Asia 990608, NO CD, `sfiii3na`) layout and keys (`a55432b4` / `0c129981`),
+  chosen for its flash: SIMMs 1-2 program, 3-6 graphics and samples (64 MB). `tools/mkcps3.py` encrypts (MAME
+  `cps3_mask`; checked: re-encrypting the decrypted Capcom BIOS gives the original bytes) and writes every file of
+  the set; `tools/mkmra3.py` writes the MRA (needs the user's `jtbeta.zip`). The jtcps3 MRA header's first 12 bytes
+  are region starts in 0x10000 units: SIMM 1 0x0008, 3 0x0088, 4 0x0188, 5 0x0288, 2 0x0388, 6 0x0408 (0x02C8 marks an
+  absent SIMM); bytes 0x10-0x17 the keys. The first measurements below (until "Video test") used Red Earth (Asia, NO
+  CD, `redearthn`, keys `9e300ab1` / `a175b82c`, 36 MB of flash).
 - CPU speed: the same CPU-bound C program (SH-2 at 25 MHz, 419,470 cycles a frame, timed with the free-running
   timer) ran 2.6-3.0x slower per frame on jtcps3 than in MAME. Budget against jtcps3, not MAME.
 - MAME fetches opcodes only from the BIOS ROM, SIMM 1/2 (0x06000000) and cache RAM (0xC0000000), not main RAM.
@@ -156,7 +160,56 @@ character DMA or palette DMA, so the video model above rests on MAME (and its re
 | Uncached mirror 0x2xxxxxxx for I/O | Agrees with `sh2.cpp` (0x2 area masked to the same devices); the cache effect is not modelled by MAME |
 | sh7604.h DMAOR address wrong (their own note) | Not used by us |
 
+## Video test 2: the features a port uses (`make vtest2`, `scripts/cps3_vtest.sh vtest2`)
+
+`src/vtest2.c` draws `tools/vtest2.py`'s scene: four 64x64 tilemaps as bands back to front (tilemap 3 on lines
+96-223 only), tiles from all 8 character RAM banks (tile numbers up to 32,767 through the bank window), colour codes
+up to 0x1ff (colour RAM entries up to 0x1ffff); six phases: parallax scrolls, tilemap 3 past the 1024-pixel wrap,
+vertical scrolls of 500, 1000, 1010 and -30, 120 sprites interleaved between the bands (sprites partly off every
+edge), the same after the program rewrites part of character RAM and colour RAM while running, and 600 sprites
+(more than the 511 entries a sublist holds).
+
+| Check | Result |
+|---|---|
+| MAME 0.289, snapshots in each phase | 6 of 6 phases: 0 of 86,016 pixels differ |
+| jtcps3 | Not run yet |
+
+## Sound (`make stest`, `scripts/cps3_stest.sh`)
+
+16 voices of signed 8-bit PCM read from the sample flash (SIMMs 3-6), no sound CPU (MAME `cps3_a.cpp`). Registers,
+32-bit, voice v at 0x040e0000 + 32 v (`src/cps3s.c` writes them through the cache-through mirror 0x240e0000):
+
+| Register | Bits |
+|---|---|
+| 1 | start address, 16-bit halves swapped |
+| 2 | bit 0: loop on |
+| 3 | bits 16-31 step (1/4096 sample per output sample), 0-15 loop address bits 0-15 |
+| 4 | loop address bits 16-31 |
+| 5, 6 | end address, halves swapped; games write both equal (which one is a loop end is unknown) |
+| 7 | volume, signed 16-bit: bits 16-31 heard on the left speaker in MAME, 0-15 on the right (see below) |
+| 0x040e0200 | bits 16-31: key on per voice; off -> on restarts the voice at its start |
+
+- Chip address = sample flash byte offset + 0x400000. MAME's sample region (user5) holds, per pair of flash chips
+  (2j, 2j + 1) covering 4 MB, byte 4w + 0 / 1 / 2 / 3 = chip 2j + 1 byte 2w, chip 2j byte 2w, chip 2j + 1 byte
+  2w + 1, chip 2j byte 2w + 1 (`tools/mkcps3.py` writes the chips from a flat image).
+- Output rate clock / 384 = 37,286 Hz; per voice sample x volume / 2^23. The position advances by step / 4096 a
+  sample; at end it jumps to loop (loop on) or the voice goes silent and stays keyed (loop off).
+- Left / right (Observed in MAME): `cps3.cpp` routes chip output 1, computed from register 7 bits 16-31 (which
+  `cps3_a.cpp` names "volume right"), to the left speaker, and output 0 (bits 0-15) to the right. A voice with only
+  bits 0-15 set is silent on the left of MAME's WAV. Not checked on hardware.
+- Register writes while a voice plays (volume, step) take effect at once.
+
+`src/stest.c` plays `tools/stest.py`'s schedule (scenes A-G: one-shot, intro + loop, pan, step change, left / right,
+negative volume, two voices cancelling, pitch x1 / x2 / x3 / x1/4, samples in SIMMs 4, 5 and 6, all 16 voices,
+restart by key off -> on, key-on while on); the text layer names the scene.
+
+| Check | Result |
+|---|---|
+| MAME 0.289: the 250 register writes, with their frame, against the schedule | Equal |
+| MAME 0.289: `-wavwrite` at 37,286 Hz, both channels, against the chip computed from the logged writes (`tools/stest_check.py`) | Every sample equal (max error 0 LSB), 24.2 s |
+| jtcps3 | Not heard or captured yet |
+
 ## Inferred, not tested
 
-Sound: 16 channels of 8-bit PCM read from the SIMM (graphics) flash, no sound CPU (MAME `cps3_a.cpp`); Red Earth's
-layout has 0x2C80000 bytes of SIMM, so ~25 MB of 12 kHz 8-bit music fits as PCM.
+Sound capacity: the 64 MB of sample flash in the `sfiii3na` layout hold about 35 minutes of 8-bit PCM at 32 kHz
+(less space if graphics share the flash).

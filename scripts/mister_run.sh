@@ -1,8 +1,8 @@
 #!/bin/sh
 # Install a CPS3 test set on the MiSTer (jtcps3), load it, take N screenshots STEP s apart (the first after WAIT s)
 # into <mame_dir>/../mister/shot_<i>.png, then return to the menu.
-#   scripts/mister_run3.sh <mame_dir> <name> <title> [shots] [step]
-# <mame_dir>: tools/mkcps3.py's output (redearthn/). MISTER=root@host (required; the MiSTer needs jtcps3.rbf
+#   scripts/mister_run.sh <mame_dir> <name> <title> [shots] [step]
+# <mame_dir>: tools/mkcps3.py's output (sfiii3na/), e.g. build/vtest2/mame. MISTER=root@host (required; the MiSTer needs jtcps3.rbf
 # and jtbeta.zip). Installs /media/fat/games/mame/<name>.zip and /media/fat/_Arcade/<MRA_DIR, default _CPS3Test>/<title>.mra.
 set -e
 cd "$(dirname "$0")/.."

@@ -19,3 +19,5 @@ RUN wget -q https://ftp.gnu.org/gnu/gcc/gcc-$GCC/gcc-$GCC.tar.xz && tar xf gcc-$
  && make -j$(nproc) CFLAGS=-O2 CXXFLAGS=-O2 all-gcc all-target-libgcc && make install-gcc install-target-libgcc \
  && cd .. && rm -rf g gcc-$GCC*
 WORKDIR /p
+# numpy for tools/stest_check.py
+RUN apt-get update && apt-get install -y --no-install-recommends python3-numpy && rm -rf /var/lib/apt/lists/*

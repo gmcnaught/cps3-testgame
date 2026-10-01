@@ -35,6 +35,10 @@ void cps3v_end(void);
 /* at VBlank: global scrolls, the sprite-list DMA of the last finished list */
 void cps3v_vblank(void);
 
+/* SS text layer (drawn over everything): 8x8 font for ASCII 32-95 in white, 48 x 28 cells on screen */
+void cps3v_text_init(void);
+void cps3v_text(int col, int row, const char *s);   /* row 0-27, col 0-47 */
+
 extern volatile uint32_t vbl_count;             /* src/crt0.S's VBlank handler counts here */
 void cps3v_wait_vblank(void);
 #endif

@@ -4,7 +4,9 @@
    as 16-bit halves, colour RAM, SS RAM and sprite RAM as 32-bit words. */
 #include "cps3v.h"
 
-#define R16(a)    (*(volatile uint16_t *)(a))
+/* reads through the uncached mirror (0x2xxxxxxx), as the BIOS does: a cached read of a status register returns the
+   cache line's old value (on jtcps3 the sprite-list wait in cps3v_vblank ran to its limit every frame) */
+#define R16(a)    (*(volatile uint16_t *)((a) | 0x20000000u))
 #define W16(a, v) (*(volatile uint16_t *)(a) = (uint16_t)(v))
 #define W32(a, v) (*(volatile uint32_t *)(a) = (uint32_t)(v))
 #define W8(a, v)  (*(volatile uint8_t *)(a) = (uint8_t)(v))
@@ -175,4 +177,31 @@ void cps3v_vblank(void)
     for (int t = 0; t < 10000 && (R16(PPU + 0x0c) & 1); t++)
         ;
     W16(PPU + 0x82, 0);
+}
+
+/* text layer: SS RAM bytes 2n and 2n + 1 are bits 16-23 and 0-7 of the word at 0x05040000 + 4n (written as whole
+   words, as the BIOS does); map cells (row * 64 + col) * 2, little-endian, tile in bits 0-8; 8x8 4-bit tiles from
+   byte 0x4000, 32 bytes each, the left pixel of a byte in its low nibble; colours from 0x1fe00 (SS register 0x12) */
+#include "font.h"
+#define SSW(n, a, b) W32(SSRAM + 4 * (n), ((uint32_t)(a) << 16) | (b))
+
+static uint8_t glyph_byte(int c, int y, int x)
+{
+    uint8_t r = font[c][y];
+    return ((r >> (7 - x)) & 1) | (((r >> (6 - x)) & 1) << 4);
+}
+
+void cps3v_text_init(void)
+{
+    for (int c = 0; c < 64; c++)
+        for (int y = 0; y < 8; y++)
+            for (int x = 0; x < 8; x += 4)
+                SSW((0x4000 + (32 + c) * 32 + y * 4 + x / 2) / 2, glyph_byte(c, y, x), glyph_byte(c, y, x + 2));
+    W32(COLOUR + 2 * 0x1fe00, 0x00007fffu);    /* colour 0 transparent, 1 white */
+}
+
+void cps3v_text(int col, int row, const char *s)
+{
+    for (; *s; s++, col++)
+        SSW(row * 64 + col, (uint8_t)*s, 0);
 }
