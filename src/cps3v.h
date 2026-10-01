@@ -31,6 +31,7 @@ void cps3v_begin(void);
 void cps3v_band(int tm, int top, int lines);    /* tilemap tm on screen lines top .. top + lines - 1 */
 /* w, h in tiles (1, 2 or 4); tiles numbered column by column from tile; (x, y) = top-left pixel */
 void cps3v_sprite(int x, int y, int w, int h, uint32_t tile, uint32_t pal, uint32_t flags);
+void cps3v_group(void);                         /* later entries in a new main-list record (sublist) */
 void cps3v_end(void);
 /* at VBlank: global scrolls, the sprite-list DMA of the last finished list */
 void cps3v_vblank(void);

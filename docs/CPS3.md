@@ -109,7 +109,8 @@ screen coordinates without the CPS3 formulas.
 | Check | Result |
 |---|---|
 | MAME 0.289, snapshots in each phase | 6 of 6 phases: 0 of 86,016 pixels differ |
-| jtcps3 (`jtcps3.rbf` 2026-09-24), 32 screenshots 2 s apart (`scripts/mister_run.sh`, `tools/vtest_check.py`) | Phases 0-4: each has screenshots with 0 pixels differing (12 of 23 shots), after the two corrections below. Phase 5: 6-bit colour sprites 4 tiles wide are drawn 2 tiles wide (3,328 px), with or without word 3 bits 8-9; 1- and 2-tile-wide 6-bit sprites match |
+| jtcps3 (`jtcps3.rbf` 2026-09-24), Red Earth set, 32 screenshots 2 s apart (`scripts/mister_run.sh`, `tools/vtest_check.py`) | Phases 0-4: each has screenshots with 0 pixels differing (12 of 23 shots), after the two corrections below. Phase 5: 6-bit colour sprites 4 tiles wide are drawn 2 tiles wide (3,328 px), with or without word 3 bits 8-9; 1- and 2-tile-wide 6-bit sprites match |
+| jtcps3, `sfiii3na` set (2026-10-01), 16 shots 4 s apart | Phases 0-4: shots with 0-15 pixels differing; phase 5: 3,291-3,301 pixels (the same 6-bit sprite difference) |
 
 Measured on jtcps3 (Observed):
 
@@ -166,13 +167,32 @@ character DMA or palette DMA, so the video model above rests on MAME (and its re
 96-223 only), tiles from all 8 character RAM banks (tile numbers up to 32,767 through the bank window), colour codes
 up to 0x1ff (colour RAM entries up to 0x1ffff); six phases: parallax scrolls, tilemap 3 past the 1024-pixel wrap,
 vertical scrolls of 500, 1000, 1010 and -30, 120 sprites interleaved between the bands (sprites partly off every
-edge), the same after the program rewrites part of character RAM and colour RAM while running, and 600 sprites
-(more than the 511 entries a sublist holds).
+edge), the same split into four main-list records, 600 sprites (more than the 511 entries a sublist holds: two
+main-list records of 511 and 96 entries), and last the 120-sprite scene after the program rewrites part of character
+RAM and colour RAM while running (and reads both back through the uncached mirror; a difference would show on the text
+layer).
 
 | Check | Result |
 |---|---|
-| MAME 0.289, snapshots in each phase | 6 of 6 phases: 0 of 86,016 pixels differ |
-| jtcps3 | Not run yet |
+| MAME 0.289, snapshots in each phase | 7 of 7 phases: 0 of 86,016 pixels differ |
+| jtcps3 (`jtcps3.rbf` 2026-09-24), 16 shots 5 s apart, `tools/vtest_check.py` | Phases 0-4: shots with 0-9 pixels differing (capture noise, below) |
+| jtcps3, phase 5 (600 sprites) | 8,329-8,335 pixels differ; the shots equal the screen composed without the second main-list record (6-8 pixels) |
+| jtcps3, phase 6 (reload) | The screen keeps the old tiles of tilemaps 0 and 3 and of the reloaded sprite tile; the new colours show (shots equal phase 3's screen but for the reloaded colours, 456-533 pixels). The read-back found every rewritten tile and colour equal to what was written |
+
+Observed on jtcps3, not explained (the jtcps3 HDL was not read):
+
+- Character RAM written by the CPU after the first frames reads back correctly but is not drawn: the tiles drawn
+  stay those written at start-up. Colour RAM writes at the same time are drawn. Not tried: character DMA, writing
+  with the display off or with the tiles not in use.
+- In one run (the first, before the read-back was added) some tiles written at start-up drew as partly written (the
+  first column of a 4x4 sprite, tiles 20,495-20,498, and tiles 32,764-32,767); the three runs after it drew every
+  start-up tile correctly. Unknown cause.
+- A display list of two main-list records with 511 and 96 entries draws only the first; four records of about 32
+  entries each draw correctly. Either about 511 entries a frame is a limit, or a record after a full 511-entry
+  sublist is lost: not yet told apart.
+- Screenshot noise: with the program frozen (`CDEFS=-DFREEZE_AT=1500`: no video writes after frame 1,500, only the
+  VBlank acknowledge), shots of the still screen still differ from the expected one by 3-97 scattered single pixels,
+  different in each shot: the capture, not the drawing.
 
 ## Sound (`make stest`, `scripts/cps3_stest.sh`)
 
@@ -207,7 +227,7 @@ restart by key off -> on, key-on while on); the text layer names the scene.
 |---|---|
 | MAME 0.289: the 250 register writes, with their frame, against the schedule | Equal |
 | MAME 0.289: `-wavwrite` at 37,286 Hz, both channels, against the chip computed from the logged writes (`tools/stest_check.py`) | Every sample equal (max error 0 LSB), 24.2 s |
-| jtcps3 | Not heard or captured yet |
+| jtcps3 | Runs: the text layer names each scene in turn (screenshots); audio not captured or compared yet |
 
 ## Inferred, not tested
 

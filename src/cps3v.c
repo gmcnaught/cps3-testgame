@@ -158,6 +158,11 @@ void cps3v_sprite(int x, int y, int w, int h, uint32_t tile, uint32_t pal, uint3
           (code[h] << 2) | code[w]);
 }
 
+void cps3v_group(void)
+{
+    group_close();
+}
+
 void cps3v_end(void)
 {
     group_close();

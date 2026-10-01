@@ -6,7 +6,7 @@ known answer composed on the host: a MAME snapshot (or WAV) and a MiSTer `jtcps3
 | Program | Tests |
 |---|---|
 | `vtest` | Colours, CPU-written tiles, two tilemaps, sprites of every size and flip, 6-bit colour |
-| `vtest2` | What a game port uses: four tilemaps with parallax and vertical scroll, sprites between the layers in depth order, all 8 character RAM banks, colour codes up to 0x1ff, reloading tiles and colours while running, over 511 sprites |
+| `vtest2` | What a game port uses: four tilemaps with parallax and vertical scroll, sprites between the layers in depth order, all 8 character RAM banks, colour codes up to 0x1ff, reloading tiles and colours while running, over 511 sprites (in two main-list records) |
 | `stest` | The 16 PCM voices: one-shot, loops, pitch, pan, negative volume, restart, samples in every sample SIMM |
 
 Use them as:
@@ -18,9 +18,9 @@ Use them as:
 
 | Program | MAME 0.289 | jtcps3 (`jtcps3.rbf` 2026-09-24 beta) |
 |---|---|---|
-| `vtest` | 6 of 6 phases: 0 pixels differ | Phases 0-4 exact (after jtcps3's colour expansion and 1-px offset, applied by `vtest_check.py`); phase 5: 6-bit colour sprites 4 tiles wide drawn 2 tiles wide. Measured with the earlier Red Earth stand-in set |
-| `vtest2` | 6 of 6 phases: 0 pixels differ | Not run yet |
-| `stest` | 250 register writes as scheduled; WAV equal to the chip model on every sample, both channels | Not heard or captured yet |
+| `vtest` | 6 of 6 phases: 0 pixels differ | Phases 0-4 exact (after jtcps3's colour expansion and 1-px offset, applied by `vtest_check.py`); phase 5: 6-bit colour sprites 4 tiles wide drawn 2 tiles wide |
+| `vtest2` | 7 of 7 phases: 0 pixels differ | Phases 0-4 exact (four tilemaps, parallax, vertical scroll, all 8 character RAM banks, colour codes to 0x1ff, 120 sprites between the layers, four main-list records). Phase 5: with 511 + 96 entries in two main-list records, the second record is not drawn. Phase 6: tiles rewritten by the CPU while running are not shown (they read back correctly; rewritten colours do show) |
+| `stest` | 250 register writes as scheduled; WAV equal to the chip model on every sample, both channels | Runs (scenes shown on the text layer); audio not captured yet |
 
 Details, and what is known about the CPS3 video and sound hardware: [docs/CPS3.md](docs/CPS3.md).
 
@@ -58,7 +58,8 @@ python3 tools/vtest_check.py build/vtest2 build/vtest2/mister/shot_*.png
 `/media/fat/_Arcade/_CPS3Test/`, set `MRA_DIR` to change), loads the core, takes N screenshots STEP seconds apart
 and copies them back. `vtest_check.py` matches each shot to its best phase and writes a diff mask for shots that
 differ. Single scattered pixels at colour edges come from the screenshot capture (other shots of the same phase are
-exact): a phase passes when one of its shots matches. `stest` on jtcps3 is checked by ear for now (the text layer
+exact, and the noise stays with the program frozen: `make vtest2 CDEFS=-DFREEZE_AT=<frame>` stops all video writes
+from that frame): a phase passes when one of its shots matches. `stest` on jtcps3 is checked by ear for now (the text layer
 names the scene playing); `build/stest/run/model.wav` is what MAME plays, for comparison with a capture.
 
 ## Layout

@@ -49,6 +49,10 @@ int main(void)
     scene_list(0);
     for (;;) {
         cps3v_wait_vblank();
+#ifdef FREEZE_AT
+        if (frame >= FREEZE_AT)
+            continue;                         /* still screen: no more video writes */
+#endif
         int ph = (int)(frame / VT_PHASE_FRAMES);
         if (ph >= VT_PHASES)
             ph = VT_PHASES - 1;

@@ -14,10 +14,11 @@ Phases (PHASE_FRAMES frames each; the program stays in the last):
   2  vertical scroll: tilemaps at y 500, 1000 and 1010 (across the wrap) and -30
   3  120 sprites (1x1 to 4x4, flips, partly off every edge) interleaved with the bands in depth order: some behind
      tilemap 2, some between 2 and 3, some in front of 3
-  4  as 3, after the program reloads part of character RAM (tilemap 0's and 3's tiles, some sprite tiles) and some
-     colours while running, as a port does between rooms
-  5  600 sprites (1x1, overlapping, list order = depth), more than one sublist holds (511); per-line load well above
-     a game's, so on hardware this phase measures the sprite budget rather than checking a known answer
+  4  as 3, the display list split into four main-list records (a new sublist after each band); same screen as 3
+  5  600 sprites (1x1, overlapping, list order = depth), more than one sublist holds (511: the 505th sprite starts a
+     second main-list record); per-line load well above a game's
+  6  as 3, after the program reloads part of character RAM (tilemap 0's and 3's tiles, some sprite tiles) and some
+     colours while running, as a port does between rooms (last: on jtcps3 the reloaded tiles do not show)
 """
 import os
 import sys
@@ -28,13 +29,15 @@ from PIL import Image
 W, H = 384, 224
 PHASE_FRAMES = 600
 BANK = 4096                                        # tiles per 1 MB character RAM bank
-# per phase: the four tilemaps' scrolls (map pixel at the screen's top-left), the sprite set, the tile set (0 / 1)
+# per phase: the four tilemaps' scrolls (map pixel at the screen's top-left), the sprite set, the tile set (0 / 1),
+# optionally 1: a new main-list record after each band
 PHASES = [([(10, 0), (40, 8), (120, 16), (300, 24)], 0, 0),
           ([(20, 0), (80, 8), (240, 16), (900, 24)], 0, 0),
           ([(10, 500), (40, 1000), (120, 1010), (300, -30)], 0, 0),
           ([(10, 0), (40, 8), (120, 16), (300, 24)], 1, 0),
-          ([(10, 0), (40, 8), (120, 16), (300, 24)], 1, 1),
-          ([(10, 0), (40, 8), (120, 16), (300, 24)], 2, 1)]
+          ([(10, 0), (40, 8), (120, 16), (300, 24)], 1, 0, 1),
+          ([(10, 0), (40, 8), (120, 16), (300, 24)], 2, 0),
+          ([(10, 0), (40, 8), (120, 16), (300, 24)], 1, 1)]
 BANDS = [(0, 0, 224), (1, 0, 224), (2, 0, 224), (3, 96, 128)]   # (tilemap, first line, lines), back to front
 PAL = [1, 2, 0x80, 0x1c0]                          # colour code of each tilemap's tiles
 SPAL = list(range(0x1f0, 0x200))                   # sprite colour codes
@@ -145,7 +148,7 @@ def build():
     for i, (w, h) in enumerate(((1, 1), (2, 2), (2, 4), (4, 4))):
         s.sprites.append((0, 4, 20 + 80 * i, 40, w, h, imgs[(w, h)], SPAL[i], i % 2, 0))
     s.sprites.append((0, 4, 340, 160, 2, 2, top, SPAL[5], 0, 0))
-    # set 1 (phases 3-4): 120 sprites in three depth slots (after band 1, after band 2, after band 3)
+    # set 1 (phases 3, 4 and 6): 120 sprites in three depth slots (after band 1, after band 2, after band 3)
     sizes = [(1, 1), (1, 2), (2, 2), (2, 4), (4, 4)]
     for i in range(120):
         w, h = sizes[(i * 7) % 5]
@@ -162,7 +165,7 @@ def build():
 
 
 def compose(s, phase):
-    scrolls, sset, tset = phase
+    scrolls, sset, tset = phase[:3]
     tiles = dict(s.tiles)
     colours = dict(s.colours)
     if tset:
@@ -221,6 +224,8 @@ def header(s):
              + ', '.join('{' + ', '.join(f'{{{x}, {y}}}' for x, y in p[0]) + '}' for p in PHASES) + '};')
     o.append('static const uint8_t v2_set[V2_PHASES] = {' + ', '.join(str(p[1]) for p in PHASES) + '};')
     o.append('static const uint8_t v2_tileset[V2_PHASES] = {' + ', '.join(str(p[2]) for p in PHASES) + '};')
+    o.append('static const uint8_t v2_groups[V2_PHASES] = {' + ', '.join(str(p[3] if len(p) > 3 else 0) for p in PHASES)
+             + '};')
     o.append('static const uint16_t v2_bands[V2_BANDS][3] = {' + ', '.join(f'{{{a}, {b}, {c}}}' for a, b, c in BANDS)
              + '};')
 

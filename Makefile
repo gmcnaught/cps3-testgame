@@ -5,6 +5,9 @@
 #   stest   sound: the 16 PCM voices (src/stest.c, tools/stest.py)
 # Build in the cps3-dev container (docker/Dockerfile):
 #   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make [vtest|vtest2|stest]
+# CDEFS=-DFREEZE_AT=<frame> (vtest, vtest2): from that frame the program writes nothing more to the video hardware
+# (a still screen without per-frame list rebuilds, register writes or DMA), to tell screenshot-capture noise from
+# effects of the per-frame writes.
 # Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
 # samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
 PROGS  := vtest vtest2 stest
@@ -15,7 +18,7 @@ all: $(PROGS)
 $(PROGS):
 	@mkdir -p build/$@
 	python3 tools/$@.py build/$@
-	sh-elf-gcc $(CFLAGS) -Ibuild/$@ -Isrc -nostartfiles -T src/link_simm.ld -Wl,-Map,build/$@/main.map \
+	sh-elf-gcc $(CFLAGS) $(CDEFS) -Ibuild/$@ -Isrc -nostartfiles -T src/link_simm.ld -Wl,-Map,build/$@/main.map \
 	  -o build/$@/main.elf src/crt0.S src/$@.c src/cps3v.c src/cps3s.c -lgcc
 	sh-elf-objcopy -O binary -j .boot build/$@/main.elf build/$@/main.bin
 	sh-elf-objcopy -O binary -j .text -j .data build/$@/main.elf build/$@/simm1.bin
