@@ -119,8 +119,8 @@ Measured on jtcps3 (Observed):
 - The screenshot is 384x224 and shows MAME's column x at x - 1 (whole picture, tilemaps and sprites alike: best
   offset over the frame 2,044 px off vs 20,279 unshifted; 0 after the other fixes).
 - Single pixels at colour edges (0-18 a shot, different places each shot) take the neighbouring pixel's value:
-  screenshot capture, not drawing (the same phase has exact shots). A frame check on jtcps3 passes when one
-  screenshot of a still frame matches.
+  the same phase has exact shots, so they vary from frame to frame (see "Screenshot noise" under "Video test 2").
+  A frame check on jtcps3 passes when one screenshot of a still frame matches.
 - The tilemap width field (0x1f, as Red Earth writes it) does not wrap the map at 32 columns: the 440 px scroll
   shows columns 27-51 as in MAME.
 - No reset after loading in this run (the phases advanced in order from the first shot).
@@ -175,7 +175,7 @@ layer).
 | Check | Result |
 |---|---|
 | MAME 0.289, snapshots in each phase | 7 of 7 phases: 0 of 86,016 pixels differ |
-| jtcps3 (`jtcps3.rbf` 2026-09-24), 16 shots 5 s apart, `tools/vtest_check.py` | Phases 0-4: shots with 0-9 pixels differing (capture noise, below) |
+| jtcps3 (`jtcps3.rbf` 2026-09-24), 16 shots 5 s apart, `tools/vtest_check.py` | Phases 0-4: shots with 0-9 pixels differing (screenshot noise, below) |
 | jtcps3, phase 5 (600 sprites) | 8,329-8,335 pixels differ; the shots equal the screen composed without the second main-list record (6-8 pixels) |
 | jtcps3, phase 6 (reload) | The screen keeps the old tiles of tilemaps 0 and 3 and of the reloaded sprite tile; the new colours show (shots equal phase 3's screen but for the reloaded colours, 456-533 pixels). The read-back found every rewritten tile and colour equal to what was written |
 
@@ -192,7 +192,11 @@ Observed on jtcps3, not explained (the jtcps3 HDL was not read):
   sublist is lost: not yet told apart.
 - Screenshot noise: with the program frozen (`CDEFS=-DFREEZE_AT=1500`: no video writes after frame 1,500, only the
   VBlank acknowledge), shots of the still screen still differ from the expected one by 3-97 scattered single pixels,
-  different in each shot: the capture, not the drawing.
+  different in each shot. 190 of 193 wrong pixels in 7 frozen shots repeat the pixel to their right (3 the one to
+  their left). The screenshot is a plain copy of the MiSTer scaler's input frame buffer (Main_MiSTer
+  `user_io_screenshot` -> `mister_scaler_read_32`, no filtering), and every frame of a frozen screen should be the
+  same, so the frames written to that buffer differ: jtcps3's video output, or the scaler's sampling of it, is one
+  pixel early on some frames (Inferred; which of the two is Unknown).
 
 ## Sound (`make stest`, `scripts/cps3_stest.sh`)
 
