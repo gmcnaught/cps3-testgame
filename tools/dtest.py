@@ -66,7 +66,7 @@ def big_tile(i):
 def colours():
     c = {0: bgr(2, 2, 10)}
     for i in range(1, 256):
-        c[PAL * 256 + i] = bgr((i * 7) % 32, (i * 13 + 5) % 32, (i * 3 + 8) % 32)
+        c[PAL * 256 + i] = bgr(i % 32, (i // 32) * 4 + 2, (i * 5) % 32)    # one colour per pen
     return c
 
 

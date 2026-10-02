@@ -1,6 +1,6 @@
 # CPS3 test game
 
-Five small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
+Six small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
 sequence of sounds) built entirely from generated test data, and comes with the exact result it should produce. You
 can run them in MAME or on a MiSTer with the `jtcps3` core and compare, pixel for pixel or sample for sample.
 
@@ -85,6 +85,17 @@ Build options for jtcps3 checks: `SHOW_FRAME` (frame number at the bottom right)
 phases whose bit is set), `NO_VERIFY`, `NO_SWITCH` (the tilemap stays on its first map), `D2_BASE=<tile>`,
 `SR_MASK=<sr>`.
 
+### `dmap`: which tile is drawn where
+
+Each tile carries its own 16-bit number as a 4 x 4 grid of blocks, in colours that say how it got into character RAM
+(written by the CPU, copied plain from the flash, decompressed from the flash), so `tools/dmap_check.py` can read
+from a screenshot which tile the video draws in each of 312 tilemap cells, whatever went wrong. Steps of 5 seconds:
+the CPU's tiles at start; an uncompressed DMA over them, a second one, one into fresh tiles; a CPU load and a DMA with
+the display list empty for a second; two compressed DMAs (command 4 sets the decompression table, command 2 copies
+6-bit data with run lengths). `DMAP_STEPS=<name,...>` picks the steps (`tools/dmap.py`), e.g. `cpu_on`: CPU writes
+with the display on. In MAME: `scripts/cps3_dmap.sh`; on a MiSTer: `mister_run.sh build/dmap/mame dmap ...`, then
+`python3 tools/dmap_check.py build/dmap build/dmap/mister/shot_*.png`.
+
 ### `stest`: sound
 
 A 24-second sequence of seven scenes on the 16 sound voices. The scene playing is named on screen.
@@ -111,7 +122,8 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` on 2
 | `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
 | `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
 | `vtest3` | All 5 phases exact | Phases 0-2 correct (records, positions, override, mirrored piece lists, 241 records). Phases 3-4: the last 7 tiles the program writes to character RAM (1,792 bytes) are not drawn as written: some draw nothing, one draws another tile's pixels. With `PAD_TILES=64` (64 more tiles written after them) both phases are exact. The port's wrong column was the same thing (its tile was 7th from the end of its upload). Phase 11 of `vtest2`, a short reload whose tiles never show, may be the same effect |
-| `dtest` | All 5 phases exact | Phase 1 exact: the first DMA after start, set B over the tiles on screen. Phases 2-4 are not: phase 2 shows set A, phase 3 set B, phase 4 set A, while the read-back finds every copied tile equal to its source (no error printed) and the program keeps running (`SHOW_FRAME`: frames 180 to 2730 in order). With only phase 3's DMAs (`SKIP_DMA=0x16`), the screen shows set B, which that run never copied (it is the data at the start of SIMM 3); the read-back finds set D. So on jtcps3 what the video draws after a DMA is not what character RAM holds as the CPU reads it. Cause unknown |
+| `dtest` | All 5 phases exact | All 5 phases exact: DMA over the tiles on screen, into fresh tiles, 16 tiles a frame, and 1 MB in one record across the bank boundary, all while the display runs. (A first version's colours repeated every 32 pens, so some phases' screens were identical and looked like failures) |
+| `dmap` | All 8 steps as expected | All 8 steps as expected: uncompressed DMA twice over the tiles on screen and into fresh tiles, compressed DMA (command 2) twice, CPU writes and a DMA with the display list empty. With the display on, CPU writes are partly lost: in each 64-tile block the last 8 tiles keep their old pixels (`DMAP_STEPS=boot,cpu_on,over1`: 280 of 312 cells); the next DMA replaces them all |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
@@ -176,7 +188,7 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 
 | Path | What |
 |---|---|
-| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `stest.c` | The five test programs |
+| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `dmap.c`, `stest.c` | The six test programs |
 | `src/cps3v.c`, `cps3v.h` | Video library: screen set-up, colours, tiles, tilemaps, display list (layers, sprites, records pointing at prebuilt piece lists), text layer |
 | `src/cps3s.c`, `cps3s.h` | Sound library: voice set-up, volume, pitch, key on/off |
 | `src/crt0.S` | Start-up code: the bus and cache set-up the real BIOS does (jtcps3 needs it), VBlank interrupt |
