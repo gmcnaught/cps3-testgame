@@ -1,6 +1,6 @@
 # CPS3 test game
 
-Four small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
+Five small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
 sequence of sounds) built entirely from generated test data, and comes with the exact result it should produce. You
 can run them in MAME or on a MiSTer with the `jtcps3` core and compare, pixel for pixel or sample for sample.
 
@@ -65,6 +65,26 @@ from one drawn black.
 `python3 tools/vtest3.py --cells <diff mask>...` names the phase 3 cells in which a jtcps3 screenshot differs.
 `make vtest3 CDEFS=-DPAD_TILES=64` uploads 64 unused tiles after the scene's.
 
+### `dtest`: character DMA
+
+A CPS3 game does not write its tiles with the CPU while it runs: the video chip copies them from the graphics flash
+(SIMMs 3-6) into character RAM by **character DMA**. The program writes a list into character RAM (at byte 0x1000, as
+Red Earth does), each record a command, a length, a destination and a source; two register writes start it. This test
+uses the uncompressed command (0). 288 tiles are on screen (a 24 x 10 tilemap and 48 one-tile sprites); each phase
+shows them in another set of colours. After each DMA the program reads the tiles back and prints any difference.
+
+| Phase | What happens | What it checks |
+|---|---|---|
+| 0 | Set A, written by the CPU at start | The starting picture |
+| 1 | Set B copied over the tiles on screen, one list of two records | A DMA over tiles being drawn |
+| 2 | Set C copied into tiles never used (0x4000 on), the screen switched to them | A DMA into fresh tiles |
+| 3 | Set D copied over the tiles on screen, 16 tiles a frame for 18 frames | Streaming, one small DMA a frame |
+| 4 | 1 MB in one record (4,096 tiles across the 1 MB bank boundary), set E shown from it | A level-sized load |
+
+Build options for jtcps3 checks: `SHOW_FRAME` (frame number at the bottom right), `SKIP_DMA=<mask>` (no DMA in the
+phases whose bit is set), `NO_VERIFY`, `NO_SWITCH` (the tilemap stays on its first map), `D2_BASE=<tile>`,
+`SR_MASK=<sr>`.
+
 ### `stest`: sound
 
 A 24-second sequence of seven scenes on the 16 sound voices. The scene playing is named on screen.
@@ -84,13 +104,14 @@ recorded audio, sample by sample on both channels, against a model of the sound 
 
 ## Results so far
 
-MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01.
+MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` on 2026-10-02).
 
 | Test | MAME | jtcps3 |
 |---|---|---|
 | `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
 | `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
 | `vtest3` | All 5 phases exact | Phases 0-2 correct (records, positions, override, mirrored piece lists, 241 records). Phases 3-4: the last 7 tiles the program writes to character RAM (1,792 bytes) are not drawn as written: some draw nothing, one draws another tile's pixels. With `PAD_TILES=64` (64 more tiles written after them) both phases are exact. The port's wrong column was the same thing (its tile was 7th from the end of its upload). Phase 11 of `vtest2`, a short reload whose tiles never show, may be the same effect |
+| `dtest` | All 5 phases exact | Phase 1 exact: the first DMA after start, set B over the tiles on screen. Phases 2-4 are not: phase 2 shows set A, phase 3 set B, phase 4 set A, while the read-back finds every copied tile equal to its source (no error printed) and the program keeps running (`SHOW_FRAME`: frames 180 to 2730 in order). With only phase 3's DMAs (`SKIP_DMA=0x16`), the screen shows set B, which that run never copied (it is the data at the start of SIMM 3); the read-back finds set D. So on jtcps3 what the video draws after a DMA is not what character RAM holds as the CPU reads it. Cause unknown |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
@@ -155,7 +176,7 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 
 | Path | What |
 |---|---|
-| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `stest.c` | The four test programs |
+| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `stest.c` | The five test programs |
 | `src/cps3v.c`, `cps3v.h` | Video library: screen set-up, colours, tiles, tilemaps, display list (layers, sprites, records pointing at prebuilt piece lists), text layer |
 | `src/cps3s.c`, `cps3s.h` | Sound library: voice set-up, volume, pitch, key on/off |
 | `src/crt0.S` | Start-up code: the bus and cache set-up the real BIOS does (jtcps3 needs it), VBlank interrupt |
