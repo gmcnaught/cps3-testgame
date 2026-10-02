@@ -3,7 +3,10 @@
    section) for scripts/lua/stest_log.lua, which logs every sound-register write with it. */
 #include "cps3v.h"
 #include "cps3s.h"
-#include "stest.h"
+#ifndef ST_H
+#define ST_H "stest.h"                 /* (src/atest.c: atest.h) */
+#endif
+#include ST_H
 
 volatile uint32_t vbl_count;
 volatile uint32_t st_frame __attribute__((section(".trace")));
@@ -39,6 +42,10 @@ int main(void)
     cps3v_text_init();
     cps3v_text(2, 1, "CPS3 SOUND TEST");
     cps3s_init();
+#ifdef REG84                                    /* CDEFS=-DREG84=<v>: sound register 0x84 (0x040e0210), as the games
+                                                   write it at start-up (3rd Strike: 0x00230000; MAME ignores it) */
+    ((volatile uint32_t *)0x240e0000u)[0x84] = REG84;
+#endif
     __asm__ volatile("ldc %0, sr" : : "r"(0));   /* interrupts on: VBlank (IRL 12) counts vbl_count */
     uint32_t i = 0;
     for (;;) {

@@ -115,6 +115,18 @@ A 24-second sequence of seven scenes on the 16 sound voices. The scene playing i
 The MAME check compares every sound-register write the program makes against the schedule, then compares MAME's
 recorded audio, sample by sample on both channels, against a model of the sound chip.
 
+### `atest`: sound addressing
+
+Which part of the sample memory the sound chip actually reads. Every 1 MB block of the 64 MB sample memory starts
+with its own beep code: (block / 8) + 1 high beeps, a pause, then (block mod 8) + 1 low beeps. Forty tests of 5.5 s
+play one block each (blocks 0-8, 12, 16, 17, 20, 24, 32, 33, 40, 44, 48, 63), first on voice 0, then on voice 1; the
+screen shows the address and the code to expect. `make atest CDEFS=-DREG84=0x00230000u` also writes sound register
+0x84 at start-up, as the games do. `tools/atest_decode.py <wav>` reads the codes back from a recording.
+
+Result on jtcps3 (`.rbf` 2026-09-24, heard on a MiSTer): the low beeps always right, the high beeps only 1 or 2:
+the chip reads offset mod 16 MB (SIMM 3 only), on both voices, with or without register 0x84. MAME reads all 64 MB.
+Commercial games keep their samples low (3rd Strike: below 7.6 MB).
+
 ## Results so far
 
 MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and `dmap` on 2026-10-02).
@@ -127,6 +139,7 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and 
 | `dtest` | All 5 phases exact | All 5 phases exact: DMA over the tiles on screen, into fresh tiles, 16 tiles a frame, and 1 MB in one record across the bank boundary, all while the display runs. (A first version's colours repeated every 32 pens, so some phases' screens were identical and looked like failures) |
 | `dmap` | All 10 steps as expected | All 10 steps as expected: uncompressed DMA twice over the tiles on screen and into fresh tiles, run-length DMA twice in 6bpp (command 2) and twice in 8bpp (command 3, pens 0x9a / 0xe5, table pairs), CPU writes and a DMA with the display list empty. With the display on, CPU writes are partly lost: in each 64-tile block the last 8 tiles keep their old pixels (`DMAP_STEPS=boot,cpu_on,over1`: 280 of 312 cells); the next DMA replaces them all |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
+| `atest` | Exact: every register write and every audio sample; 40 of 40 codes decoded | Samples past 16 MB are read from 16 MB lower (by ear) |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
 expands 5-bit colours to 8 bits as `v << 3 | v >> 2` (MAME uses `v << 3`), and its picture sits one pixel to the left

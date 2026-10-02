@@ -272,7 +272,17 @@ restart by key off -> on, key-on while on); the text layer names the scene.
 | MAME 0.289: `-wavwrite` at 37,286 Hz, both channels, against the chip computed from the logged writes (`tools/stest_check.py`) | Every sample equal (max error 0 LSB), 24.2 s |
 | jtcps3 | Runs: the text layer names each scene in turn (screenshots); audio not captured or compared yet |
 
+### Sample addressing (`make atest`, `scripts/cps3_stest.sh atest`)
+
+| Check | Result |
+|---|---|
+| MAME 0.289 | The 360 writes equal; every sample equal to the model; `tools/atest_decode.py` reads 40 of 40 codes |
+| jtcps3 (.rbf 2026-09-24, by ear, 2026-10-02) | Blocks 0-15 right; 16 -> 0, 17 -> 1, 24 -> 8, 32 -> 0, 48 -> 0, 63 -> 15: the chip reads offset mod 16 MB, voices 0 and 1 alike; register 0x84 = 0x00230000 (written by 3rd Strike and Red Earth at start-up, ignored by MAME) changes nothing |
+
+3rd Strike in MAME (`sfiii3n` attract, 240 s): 3,868 key-ons, every start below 7.6 MB of the sample flash; every
+sound register written as two 16-bit halves; register 0 always 0.
+
 ## Inferred, not tested
 
 Sound capacity: the 64 MB of sample flash in the `sfiii3na` layout hold about 35 minutes of 8-bit PCM at 32 kHz
-(less space if graphics share the flash).
+in MAME (less space if graphics share the flash); on jtcps3 only the first 16 MB play (about 8.7 minutes at 32 kHz).

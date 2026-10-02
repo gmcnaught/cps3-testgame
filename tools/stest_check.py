@@ -11,6 +11,7 @@
    against the WAV: every sample within 1 LSB at lag 0. Each write takes effect from output sample ceil(t x rate).
    The model is written to model.wav when given (e.g. to compare with a capture from hardware).
 """
+import os
 import sys
 import wave
 
@@ -79,9 +80,10 @@ def model(writes, img, total):
 
 def main():
     bd, logf, wavf = sys.argv[1:4]
-    img = np.frombuffer(open(f'{bd}/stest.bin', 'rb').read(), np.int8).astype(np.int64)
-    exp = [tuple(int(x, 16) if k == 2 else int(x) for k, x in enumerate(l.split())) for l in open(f'{bd}/stest_writes.txt')]
-    end = int(next(l for l in open(f'{bd}/stest.h') if 'ST_END_FRAME' in l).split()[2])
+    nm = os.path.basename(os.path.normpath(bd))    # stest, atest: tools/<nm>.py's output
+    img = np.frombuffer(open(f'{bd}/{nm}.bin', 'rb').read(), np.int8).astype(np.int64)
+    exp = [tuple(int(x, 16) if k == 2 else int(x) for k, x in enumerate(l.split())) for l in open(f'{bd}/{nm}_writes.txt')]
+    end = int(next(l for l in open(f'{bd}/{nm}.h') if 'ST_END_FRAME' in l).split()[2])
     writes = []
     for line in open(logf):
         t, fr, off, data = line.split()
