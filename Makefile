@@ -2,15 +2,17 @@
 #   vtest   video: colours, tiles, two tilemaps, sprites of every size and flip (src/vtest.c, tools/vtest.py)
 #   vtest2  video as a port uses it: four tilemaps (parallax), vertical scroll, character RAM banks and reloads,
 #           over 511 sprites, high colour codes (src/vtest2.c, tools/vtest2.py)
+#   vtest3  objects as one main-list record each: prebuilt sublists, record position, colour code override
+#           (src/vtest3.c, tools/vtest3.py)
 #   stest   sound: the 16 PCM voices (src/stest.c, tools/stest.py)
 # Build in the cps3-dev container (docker/Dockerfile):
-#   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make [vtest|vtest2|stest]
-# CDEFS=-DFREEZE_AT=<frame> (vtest, vtest2): from that frame the program writes nothing more to the video hardware
+#   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make [vtest|vtest2|vtest3|stest]
+# CDEFS=-DFREEZE_AT=<frame> (vtest, vtest2, vtest3): from that frame the program writes nothing more to the video hardware
 # (a still screen without per-frame list rebuilds, register writes or DMA), to tell screenshot-capture noise from
 # effects of the per-frame writes.
 # Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
 # samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
-PROGS  := vtest vtest2 stest
+PROGS  := vtest vtest2 vtest3 stest
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -fomit-frame-pointer -Wall -Wextra
 
 all: $(PROGS)

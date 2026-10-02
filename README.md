@@ -1,6 +1,6 @@
 # CPS3 test game
 
-Three small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
+Four small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
 sequence of sounds) built entirely from generated test data, and comes with the exact result it should produce. You
 can run them in MAME or on a MiSTer with the `jtcps3` core and compare, pixel for pixel or sample for sample.
 
@@ -45,6 +45,25 @@ compute what that screen must look like, independently of the CPS3's register fo
 | 10 | Large sprites made from tiles uploaded in one go across a 1 MB bank boundary; black bars at the top and bottom | Bulk tile upload across banks; sprites drawn in colours that are all black (a game's screen mask) |
 | 11 | Phase 3's picture after the program replaces some tiles and colours while running | Reloading graphics between levels. The program also reads the tiles and colours back and prints any mismatch on screen |
 
+### `vtest3`: objects as one display-list group each
+
+A game port can write each animation frame's sprite pieces into sprite RAM once, at start-up (as drawn, and a
+mirrored copy), then draw every object on screen with one main-list record that points at those pieces and gives the
+object's position. The record can also replace the colour code of all its pieces (main-list word 2 bit 29, colour
+code in bits 16-24), which is how a port draws an object flashing red or as a black silhouette. A grey check layer
+covers the top half of the screen and the backdrop (dark blue) the bottom half, so a pixel left undrawn shows apart
+from one drawn black.
+
+| Phase | What is on screen | What it checks |
+|---|---|---|
+| 0 | 24 objects of 2-4 pieces, some mirrored, some red, some black, overlapping, partly off every edge | Records pointing at prebuilt piece lists (low and high in sprite RAM), record position (including negative x, which wraps in the 10-bit field), the colour-code override |
+| 1 | The same picture, every piece its own entry in one group | The same objects drawn the usual way: the screen must equal phase 0's |
+| 2 | 240 objects of two pieces | 241 main-list records in one frame (481 entries, under jtcps3's 511) |
+| 3 | 20 cells, each a variation on one arrangement taken from a port (two overlapping objects, the first red and mirrored) | One column of that arrangement differs on jtcps3 (below); each cell changes one thing (override off, second object removed, single piece, unflipped, other x positions, drawn per piece, order swapped) to show which matters |
+| 4 | The same cells, every object drawn per piece | Same screen as phase 3 |
+
+`python3 tools/vtest3.py --cells <diff mask>...` names the phase 3 cells in which a jtcps3 screenshot differs.
+
 ### `stest`: sound
 
 A 24-second sequence of seven scenes on the 16 sound voices. The scene playing is named on screen.
@@ -70,6 +89,7 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01.
 |---|---|---|
 | `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
 | `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
+| `vtest3` | All 5 phases exact | Not run yet |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
@@ -97,9 +117,10 @@ More detail, and everything measured about the CPS3 video and sound hardware so 
 ### In MAME
 
 ```sh
-docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make    # builds all three into build/<test>/
+docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make    # builds all four into build/<test>/
 scripts/cps3_vtest.sh vtest                                # one snapshot per phase, compared with the expected screens
 scripts/cps3_vtest.sh vtest2
+scripts/cps3_vtest.sh vtest3
 scripts/cps3_stest.sh                                      # register writes and audio, compared with the schedule and chip model
 mame sfiii3na -rompath build/vtest2/mame                   # just to watch one
 ```
@@ -133,12 +154,12 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 
 | Path | What |
 |---|---|
-| `src/vtest.c`, `vtest2.c`, `stest.c` | The three test programs |
-| `src/cps3v.c`, `cps3v.h` | Video library: screen set-up, colours, tiles, tilemaps, display list (layers and sprites), text layer |
+| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `stest.c` | The four test programs |
+| `src/cps3v.c`, `cps3v.h` | Video library: screen set-up, colours, tiles, tilemaps, display list (layers, sprites, records pointing at prebuilt piece lists), text layer |
 | `src/cps3s.c`, `cps3s.h` | Sound library: voice set-up, volume, pitch, key on/off |
 | `src/crt0.S` | Start-up code: the bus and cache set-up the real BIOS does (jtcps3 needs it), VBlank interrupt |
 | `src/link_simm.ld`, `link.ld` | Memory layout: program in SIMM 1 (as the games run), or all in the BIOS ROM |
-| `tools/vtest.py`, `vtest2.py`, `stest.py` | Generate each test's data, and the expected screens or register writes |
+| `tools/vtest.py`, `vtest2.py`, `vtest3.py`, `stest.py` | Generate each test's data, and the expected screens or register writes |
 | `tools/mkcps3.py`, `mkmra3.py` | Build the MAME set, and the MiSTer zip and MRA |
 | `tools/imgdiff.py`, `vtest_check.py`, `stest_check.py` | Compare results: MAME snapshots, jtcps3 screenshots, sound |
 | `scripts/cps3_vtest.sh`, `cps3_stest.sh`, `mister_run.sh` | Run the checks in MAME; run a test on a MiSTer |

@@ -149,13 +149,44 @@ void cps3v_band(int tm, int top, int lines)
 /* MAME screen_update, sprites (no zoom: draw size = 16 x tiles): left = x field - 8 w + 1, top = 1006 - y field
    - 8 h (global scroll 0, main-list position 0); size codes 1, 2, 3 = 1, 2, 4 tiles (0 = 8 tiles, not usable:
    x size 0 is a tilemap band, y size 0 draws nothing) */
-void cps3v_sprite(int x, int y, int w, int h, uint32_t tile, uint32_t pal, uint32_t flags)
+static uint32_t word1(int x, int y, int w, int h)
+{
+    return ((uint32_t)(x + 8 * w - 1) & 0x3ff) << 16 | ((uint32_t)(1006 - y - 8 * h) & 0x3ff);
+}
+static uint32_t word2(int w, int h, uint32_t flags)
 {
     static const uint8_t code[5] = { 0, 1, 2, 0, 3 };
-    entry(word0(tile, pal, flags),
-          ((uint32_t)(x + 8 * w - 1) & 0x3ff) << 16 | ((uint32_t)(1006 - y - 8 * h) & 0x3ff),
-          ((uint32_t)(16 * h - 1) << 24) | ((uint32_t)(16 * w - 1) << 16) | (flags & CPS3V_W3_300 ? 0x300 : 0) |
-          (code[h] << 2) | code[w]);
+    return ((uint32_t)(16 * h - 1) << 24) | ((uint32_t)(16 * w - 1) << 16) | (flags & CPS3V_W3_300 ? 0x300 : 0) |
+           (code[h] << 2) | code[w];
+}
+
+void cps3v_sprite(int x, int y, int w, int h, uint32_t tile, uint32_t pal, uint32_t flags)
+{
+    entry(word0(tile, pal, flags), word1(x, y, w, h), word2(w, h, flags));
+}
+
+/* a prebuilt sublist's entry at byte addr of sprite RAM: the sprite as cps3v_sprite places it at (x, y) when its
+   record's position is 0 */
+void cps3v_put(uint32_t addr, int x, int y, int w, int h, uint32_t tile, uint32_t pal, uint32_t flags)
+{
+    uint32_t e = SPR + addr;
+    W32(e + 0, word0(tile, pal, flags));
+    W32(e + 4, word1(x, y, w, h));
+    W32(e + 8, word2(w, h, flags));
+    W32(e + 12, 0);
+}
+
+/* MAME screen_update: a record's position adds to its sprites' x and y fields (10 bits, wrapping) and y counts up;
+   whichpal (word 2 bit 29) gives every sprite the record's colour code (bits 16-24) */
+void cps3v_object(uint32_t addr, uint32_t n, int x, int y, int pal)
+{
+    group_close();
+    uint32_t m = SPR + main_n * 16;
+    W32(m + 0, (n << 16) | (addr >> 4));
+    W32(m + 4, ((uint32_t)x & 0x3ff) << 16 | ((uint32_t)-y & 0x3ff));
+    W32(m + 8, pal >= 0 ? 0x20000000u | ((uint32_t)pal & 0x1ff) << 16 : 0);
+    W32(m + 12, 0);
+    main_n++;
 }
 
 void cps3v_group(void)
