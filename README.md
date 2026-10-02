@@ -6,7 +6,8 @@ can run them in MAME or on a MiSTer with the `jtcps3` core and compare, pixel fo
 
 They are useful if you are:
 - **porting a game to the CPS3**: the programs show, in small readable C, how to boot your own code, load
-  graphics, build the display list and drive the sound chip. `src/cps3v.c` (video) and `src/cps3s.c` (sound) are
+  graphics (including by character DMA from the graphics flash, plain or run-length encoded), build the display list
+  and drive the sound chip. `src/cps3v.c` (video) and `src/cps3s.c` (sound) are
   small libraries you can start from.
 - **working on a CPS3 emulator or FPGA core**: each test isolates one hardware feature, so a difference points at a
   specific feature rather than at "the game looks wrong".
@@ -116,12 +117,12 @@ recorded audio, sample by sample on both channels, against a model of the sound 
 
 ## Results so far
 
-MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` on 2026-10-02).
+MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and `dmap` on 2026-10-02).
 
 | Test | MAME | jtcps3 |
 |---|---|---|
 | `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
-| `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
+| `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear. To change tiles while the game runs, use character DMA (`dtest`, `dmap`): it works |
 | `vtest3` | All 5 phases exact | Phases 0-2 correct (records, positions, override, mirrored piece lists, 241 records). Phases 3-4: the last 7 tiles the program writes to character RAM (1,792 bytes) are not drawn as written: some draw nothing, one draws another tile's pixels. With `PAD_TILES=64` (64 more tiles written after them) both phases are exact. The port's wrong column was the same thing (its tile was 7th from the end of its upload). Phase 11 of `vtest2`, a short reload whose tiles never show, may be the same effect |
 | `dtest` | All 5 phases exact | All 5 phases exact: DMA over the tiles on screen, into fresh tiles, 16 tiles a frame, and 1 MB in one record across the bank boundary, all while the display runs. (A first version's colours repeated every 32 pens, so some phases' screens were identical and looked like failures) |
 | `dmap` | All 10 steps as expected | All 10 steps as expected: uncompressed DMA twice over the tiles on screen and into fresh tiles, run-length DMA twice in 6bpp (command 2) and twice in 8bpp (command 3, pens 0x9a / 0xe5, table pairs), CPU writes and a DMA with the display list empty. With the display on, CPU writes are partly lost: in each 64-tile block the last 8 tiles keep their old pixels (`DMAP_STEPS=boot,cpu_on,over1`: 280 of 312 cells); the next DMA replaces them all |
@@ -152,21 +153,28 @@ More detail, and everything measured about the CPS3 video and sound hardware so 
 ### In MAME
 
 ```sh
-docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make    # builds all four into build/<test>/
+docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make    # builds all six into build/<test>/
 scripts/cps3_vtest.sh vtest                                # one snapshot per phase, compared with the expected screens
 scripts/cps3_vtest.sh vtest2
 scripts/cps3_vtest.sh vtest3
+scripts/cps3_vtest.sh dtest
+scripts/cps3_dmap.sh                                       # one snapshot per step, the tiles drawn read off the screen
 scripts/cps3_stest.sh                                      # register writes and audio, compared with the schedule and chip model
 mame sfiii3na -rompath build/vtest2/mame                   # just to watch one
 ```
 
 Each check prints how many pixels (or samples) differ and exits non-zero on any difference.
 
+`dmap` is checked by reading the screen instead: `scripts/cps3_dmap.sh` (one snapshot per step, read by
+`tools/dmap_check.py`; `DMAP_STEPS=<name,...>` picks the steps, see `tools/dmap.py`).
+
 ### On a MiSTer
 
 ```sh
 MISTER=root@<mister-ip> scripts/mister_run.sh build/vtest2/mame vtest2 "CPS3 video test 2" 16 5
 python3 tools/vtest_check.py build/vtest2 build/vtest2/mister/shot_*.png
+MISTER=root@<mister-ip> scripts/mister_run.sh build/dmap/mame dmap "CPS3 DMA map" 27 2
+python3 tools/dmap_check.py build/dmap build/dmap/mister/shot_*.png
 ```
 
 `mister_run.sh` packages the test as a zip and MRA, copies them to the MiSTer (`/media/fat/games/mame/` and
@@ -194,10 +202,10 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 | `src/cps3s.c`, `cps3s.h` | Sound library: voice set-up, volume, pitch, key on/off |
 | `src/crt0.S` | Start-up code: the bus and cache set-up the real BIOS does (jtcps3 needs it), VBlank interrupt |
 | `src/link_simm.ld`, `link.ld` | Memory layout: program in SIMM 1 (as the games run), or all in the BIOS ROM |
-| `tools/vtest.py`, `vtest2.py`, `vtest3.py`, `stest.py` | Generate each test's data, and the expected screens or register writes |
+| `tools/vtest.py`, `vtest2.py`, `vtest3.py`, `dtest.py`, `dmap.py`, `stest.py` | Generate each test's data, and the expected screens or register writes |
 | `tools/mkcps3.py`, `mkmra3.py` | Build the MAME set, and the MiSTer zip and MRA |
-| `tools/imgdiff.py`, `vtest_check.py`, `stest_check.py` | Compare results: MAME snapshots, jtcps3 screenshots, sound |
-| `scripts/cps3_vtest.sh`, `cps3_stest.sh`, `mister_run.sh` | Run the checks in MAME; run a test on a MiSTer |
+| `tools/imgdiff.py`, `vtest_check.py`, `dmap_check.py`, `stest_check.py` | Compare results: MAME snapshots, jtcps3 screenshots, sound |
+| `scripts/cps3_vtest.sh`, `cps3_dmap.sh`, `cps3_stest.sh`, `mister_run.sh` | Run the checks in MAME; run a test on a MiSTer |
 | `scripts/cps3_vlog.sh`, `scripts/lua/cps3_vlog.lua`, `tools/cps3vlog.py`, `tools/cps3render.py` | Research tools: log how a real CPS3 game drives the video hardware in MAME, and re-draw a frame from a memory dump (needs your own game set in `roms/`, or `ROMPATH`) |
 
 ## License

@@ -188,8 +188,9 @@ layer).
 Observed on jtcps3, not explained (the jtcps3 HDL was not read):
 
 - Character RAM written by the CPU after the first frames reads back correctly but is not drawn: the tiles drawn
-  stay those written at start-up. Colour RAM writes at the same time are drawn. Not tried: character DMA, writing
-  with the display off or with the tiles not in use.
+  stay those written at start-up. Colour RAM writes at the same time are drawn. Later measured (`dmap`, below): with
+  the display on, CPU writes lose the last 8 tiles of each 64-tile block; with the display list empty they are all
+  drawn; character DMA works.
 - In one run (the first, before the read-back was added) some tiles written at start-up drew as partly written (the
   first column of a 4x4 sprite, tiles 20,495-20,498, and tiles 32,764-32,767); the three runs after it drew every
   start-up tile correctly. Unknown cause.
@@ -204,6 +205,37 @@ Observed on jtcps3, not explained (the jtcps3 HDL was not read):
   `user_io_screenshot` -> `mister_scaler_read_32`, no filtering), and every frame of a frozen screen should be the
   same, so the frames written to that buffer differ: jtcps3's video output, or the scaler's sampling of it, is one
   pixel early on some frames (Inferred; which of the two is Unknown).
+
+## Character DMA (`make dtest`, `make dmap`; 2026-10-02)
+
+How a program loads tiles while it runs, as the games do: the video chip copies them from the graphics flash
+(SIMMs 3-6, MAME's `user5`) into character RAM. Format from MAME 0.289 `cps3.cpp` (`process_character_dma`,
+`do_char_dma`, `do_alt_char_dma`), start-up writes from Red Earth (`scripts/cps3_vlog.sh`):
+
+- The list lives in character RAM (Red Earth: byte 0x1000), written by the CPU through the bank window. Records of
+  three 32-bit words: (command << 21 | (length / 8 - 1)), destination byte / 8, (source + 0x400000) / 2 with the
+  source counted from the start of the graphics flash. Bit 24 of a record's first word ends the list.
+- Commands: 0 copies length bytes; 4 sets the decompression table (its source address); 2 decodes 6bpp run-length
+  data (a byte under 0x40 is a pixel, 0x40 | n repeats the last pixel n + 1 times, 0x80 | i writes table pair i);
+  3 decodes 8bpp run-length data (a control byte for each 8 items, bit 7 first: set = a table pair by index, clear =
+  a pixel byte; after two equal bytes in a row the next byte is a count of (count + 1) & 0xff more copies). For 2
+  and 3 the length counts bytes written.
+- Start: 16-bit writes 0x040c0096 = list word address (byte address / 4), 0x040c0098 = 0x0040 | address bits 16-21
+  (MAME: bit 6 starts the list; Red Earth's value 0x0040). Busy: 0x040c000c bit 1 (read through the uncached
+  mirror). End: IRQ 10, acknowledged by a write to 0x05110000; these programs mask IRL 10 (SR 0xa0) and poll.
+- Byte order: DMA source byte a is byte a ^ 1 of the flash image as `tools/mkcps3.py` takes it (the sound chip reads
+  byte a): measured in MAME, where a ^ 2 gave each 32-bit word's bytes reversed. Pixels land in character RAM in
+  order, left pixel first, as CPU-written tiles.
+
+| Test | MAME 0.289 | jtcps3 (`.rbf` 2026-09-24) |
+|---|---|---|
+| `dtest`: command 0 over 288 tiles on screen (two records), into fresh tiles (0x4000), 16 tiles a frame for 18 frames, 1 MB in one record across the 1 MB bank boundary | 5 of 5 phases exact, read-back equal | 5 of 5 phases exact (12 shots) |
+| `dmap`: 312 labelled tiles a step: command 0 twice over the tiles on screen, into fresh tiles, with the display list empty; CPU writes with the display list empty; commands 4 + 2 twice; commands 4 + 3 twice (8-bit pens 0x9a / 0xe5, table pairs on odd tiles) | 10 of 10 steps | 10 of 10 steps |
+| `dmap` `cpu_on`: CPU writes over the tiles on screen with the display on | 312 of 312 cells | 280 of 312: in each 64-tile block the last 8 tiles keep their old pixels (cells 56-63, 120-127, ...); the next DMA replaces them all |
+
+A first `dtest` palette repeated every 32 pens (pen i and i + 32 the same colour), so phases 2 and 4 drew like
+phase 0 and phase 3 like phase 1, and the shots were read as failures; `dmap` labels each tile instead, and `dtest`
+now has one colour per pen.
 
 ## Sound (`make stest`, `scripts/cps3_stest.sh`)
 
