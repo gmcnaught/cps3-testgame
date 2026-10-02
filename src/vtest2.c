@@ -174,6 +174,11 @@ int main(void)
         }
         if (v2_tileset[ph] && !loaded) {      /* the reload, while the display runs */
             tiles(v2_tiles_b_num, v2_tiles_b, V2_TILES_B_N);
+#ifdef PAD_TILES                              /* jtcps3 check: PAD_TILES unused tiles written after the reload's */
+            static const uint8_t pad[256];
+            for (uint32_t i = 0; i < PAD_TILES; i++)
+                cps3v_tiles(0x7f00 + i, pad, 1);
+#endif
             colours(v2_colours_b, V2_COLOURS_B_N, 0);
             verify(25, v2_tiles_b_num, v2_tiles_b, V2_TILES_B_N, v2_colours_b, V2_COLOURS_B_N);
             loaded = 1;
