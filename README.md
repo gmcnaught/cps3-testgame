@@ -59,10 +59,11 @@ from one drawn black.
 | 0 | 24 objects of 2-4 pieces, some mirrored, some red, some black, overlapping, partly off every edge | Records pointing at prebuilt piece lists (low and high in sprite RAM), record position (including negative x, which wraps in the 10-bit field), the colour-code override |
 | 1 | The same picture, every piece its own entry in one group | The same objects drawn the usual way: the screen must equal phase 0's |
 | 2 | 240 objects of two pieces | 241 main-list records in one frame (481 entries, under jtcps3's 511) |
-| 3 | 20 cells, each a variation on one arrangement taken from a port (two overlapping objects, the first red and mirrored) | One column of that arrangement differs on jtcps3 (below); each cell changes one thing (override off, second object removed, single piece, unflipped, other x positions, drawn per piece, order swapped) to show which matters |
+| 3 | 20 cells, each a variation on one arrangement taken from a port (two overlapping objects, the first red and mirrored) | The port showed one wrong column on jtcps3; each cell changes one thing (override off, second object removed, single piece, unflipped, other x positions, drawn per piece, order swapped). The cells' tiles are the last ones the program uploads, which is what matters on jtcps3 (below) |
 | 4 | The same cells, every object drawn per piece | Same screen as phase 3 |
 
 `python3 tools/vtest3.py --cells <diff mask>...` names the phase 3 cells in which a jtcps3 screenshot differs.
+`make vtest3 CDEFS=-DPAD_TILES=64` uploads 64 unused tiles after the scene's.
 
 ### `stest`: sound
 
@@ -89,7 +90,7 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01.
 |---|---|---|
 | `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
 | `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
-| `vtest3` | All 5 phases exact | Not run yet |
+| `vtest3` | All 5 phases exact | Phases 0-2 correct (records, positions, override, mirrored piece lists, 241 records). Phases 3-4: the last 7 tiles the program writes to character RAM (1,792 bytes) are not drawn as written: some draw nothing, one draws another tile's pixels. With `PAD_TILES=64` (64 more tiles written after them) both phases are exact. The port's wrong column was the same thing (its tile was 7th from the end of its upload). Phase 11 of `vtest2`, a short reload whose tiles never show, may be the same effect |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3

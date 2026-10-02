@@ -17,6 +17,11 @@ static void scene_upload(void)
     cps3v_colours(0, pal_shadow, 0x20000);
     for (uint32_t i = 0; i < V3_TILES_N; i++)
         cps3v_tiles(v3_tiles_num[i], v3_tiles + 256 * i, 1);
+#ifdef PAD_TILES                              /* jtcps3 check: PAD_TILES unused tiles written after the scene's */
+    static const uint8_t pad[256];
+    for (uint32_t i = 0; i < PAD_TILES; i++)
+        cps3v_tiles(0x7f00 + i, pad, 1);
+#endif
     for (int r = 0; r < 64; r++)
         for (int k = 0; k < 64; k++)
             cps3v_cell(CPS3V_MAP_UNIT(0), k, r, V3_CHECK_TILE, V3_CHECK_PAL, 0);
