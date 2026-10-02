@@ -1,5 +1,5 @@
 /* CPS3 character RAM load experiments (tools/dmap.py): labelled tiles loaded by the CPU, by uncompressed character
-   DMA (command 0) and by compressed character DMA (command 4 table, command 2 data), over the tiles on screen, into
+   DMA (command 0) and by compressed character DMA (command 4 table, command 2 6-bit or 3 8-bit data), over the tiles on screen, into
    fresh tiles, and with the display list empty during the load; tilemap 0 shows 24 x 13 tiles from the step's first
    shown tile, whose labels tools/dmap_check.py reads off the screen. The DMA as src/dtest.c starts it (Red Earth's
    writes). After each load the tiles are read back: text row 26 shows "BAD <count>" on a difference. Text row 27:
@@ -92,9 +92,10 @@ static void load(const struct m_step *s)
         t = dma();
         break;
     case 2:
+    case 3:                                   /* 6-bit (2) or 8-bit (3) compressed, after the table (4) */
         W16(PPU + 0x86, 0);
         rec(4, M_TABLE_AT, 0, 256);
-        rec(2, M_RLE_AT + 0x80000u * s->src, 256u * s->dest, 256u * M_N);
+        rec(s->kind, M_RLE_AT + 0x80000u * s->src, 256u * s->dest, 256u * M_N);
         t = dma();
         break;
     }
@@ -114,9 +115,9 @@ static void scene_list(int on)
 int main(void)
 {
     cps3v_init();
-    for (int k = 0; k < 7; k++)
-        pal_shadow[256 + k] = m_colours[k];
-    pal_shadow[0] = m_colours[0];
+    for (int k = 0; k < M_COLOURS_N; k++)      /* colour code 1; entry 0 also the backdrop */
+        pal_shadow[256 + (m_colours[k] >> 16)] = (uint16_t)m_colours[k];
+    pal_shadow[0] = (uint16_t)m_colours[0];
     cps3v_colours(0, pal_shadow, 0x20000);
     cps3v_text_init();                        /* after the colours: its own at 0x1fe00 */
     load(&m_step[0]);

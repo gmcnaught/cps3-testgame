@@ -88,11 +88,12 @@ phases whose bit is set), `NO_VERIFY`, `NO_SWITCH` (the tilemap stays on its fir
 ### `dmap`: which tile is drawn where
 
 Each tile carries its own 16-bit number as a 4 x 4 grid of blocks, in colours that say how it got into character RAM
-(written by the CPU, copied plain from the flash, decompressed from the flash), so `tools/dmap_check.py` can read
+(written by the CPU, copied plain from the flash, decoded from 6bpp or 8bpp run-length data in the flash), so `tools/dmap_check.py` can read
 from a screenshot which tile the video draws in each of 312 tilemap cells, whatever went wrong. Steps of 5 seconds:
 the CPU's tiles at start; an uncompressed DMA over them, a second one, one into fresh tiles; a CPU load and a DMA with
-the display list empty for a second; two compressed DMAs (command 4 sets the decompression table, command 2 copies
-6-bit data with run lengths). `DMAP_STEPS=<name,...>` picks the steps (`tools/dmap.py`), e.g. `cpu_on`: CPU writes
+the display list empty for a second; two 6bpp run-length DMAs (command 2: 6-bit pixels, a byte 0x40 | n repeats the
+last pixel) and two 8bpp ones (command 3: 8-bit pixels, a control byte per 8 items, items from a table of byte pairs,
+a count after two equal bytes); command 4 sets the table. `DMAP_STEPS=<name,...>` picks the steps (`tools/dmap.py`), e.g. `cpu_on`: CPU writes
 with the display on. In MAME: `scripts/cps3_dmap.sh`; on a MiSTer: `mister_run.sh build/dmap/mame dmap ...`, then
 `python3 tools/dmap_check.py build/dmap build/dmap/mister/shot_*.png`.
 
@@ -123,7 +124,7 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` on 2
 | `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear |
 | `vtest3` | All 5 phases exact | Phases 0-2 correct (records, positions, override, mirrored piece lists, 241 records). Phases 3-4: the last 7 tiles the program writes to character RAM (1,792 bytes) are not drawn as written: some draw nothing, one draws another tile's pixels. With `PAD_TILES=64` (64 more tiles written after them) both phases are exact. The port's wrong column was the same thing (its tile was 7th from the end of its upload). Phase 11 of `vtest2`, a short reload whose tiles never show, may be the same effect |
 | `dtest` | All 5 phases exact | All 5 phases exact: DMA over the tiles on screen, into fresh tiles, 16 tiles a frame, and 1 MB in one record across the bank boundary, all while the display runs. (A first version's colours repeated every 32 pens, so some phases' screens were identical and looked like failures) |
-| `dmap` | All 8 steps as expected | All 8 steps as expected: uncompressed DMA twice over the tiles on screen and into fresh tiles, compressed DMA (command 2) twice, CPU writes and a DMA with the display list empty. With the display on, CPU writes are partly lost: in each 64-tile block the last 8 tiles keep their old pixels (`DMAP_STEPS=boot,cpu_on,over1`: 280 of 312 cells); the next DMA replaces them all |
+| `dmap` | All 10 steps as expected | All 10 steps as expected: uncompressed DMA twice over the tiles on screen and into fresh tiles, run-length DMA twice in 6bpp (command 2) and twice in 8bpp (command 3, pens 0x9a / 0xe5, table pairs), CPU writes and a DMA with the display list empty. With the display on, CPU writes are partly lost: in each 64-tile block the last 8 tiles keep their old pixels (`DMAP_STEPS=boot,cpu_on,over1`: 280 of 312 cells); the next DMA replaces them all |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3

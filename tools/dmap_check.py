@@ -15,7 +15,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dmap  # noqa: E402
 
-NAMES = {dmap.CPU: 'cpu', dmap.PLAIN: 'plain', dmap.RLE: 'rle'}
+NAMES = {dmap.CPU: 'cpu', dmap.PLAIN: 'plain', dmap.RLE: 'rle', dmap.RLE8: 'rle8'}
 
 
 def palette():
