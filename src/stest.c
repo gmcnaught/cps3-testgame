@@ -1,4 +1,4 @@
-/* CPS3 sound test (tools/stest.py's samples and schedule, through src/cps3s.c): at each VBlank the operations of
+/* CPS3 sound test (tools/stest.py's samples and schedule, through sdk/src/cps3s.c): at each VBlank the operations of
    that frame, in order; the text layer names the scene playing. st_frame sits first in RAM (0x02000000, the .trace
    section) for scripts/lua/stest_log.lua, which logs every sound-register write with it. */
 #include "cps3v.h"

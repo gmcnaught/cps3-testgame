@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPS3 video test 3 (src/vtest3.c, src/cps3v.c): objects drawn as one main-list record each, as a port draws its
+"""CPS3 video test 3 (src/vtest3.c, sdk/src/cps3v.c): objects drawn as one main-list record each, as a port draws its
 instances: the object's pieces are written once into sprite RAM as a sublist (prebuilt, mirrored copies too), and each
 frame a record points at that sublist with the object's position and, for some, a colour code that replaces the
 pieces' own (main-list word 2 bit 29, bits 16-24). The scene is written as a C header and the screens it should

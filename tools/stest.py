@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPS3 sound test (src/stest.c, src/cps3s.c): generated samples and a schedule of voice operations by frame.
+"""CPS3 sound test (src/stest.c, sdk/src/cps3s.c): generated samples and a schedule of voice operations by frame.
     stest.py <out_dir>      -> <out_dir>/stest.h, stest.bin, stest_writes.txt
 stest.bin: the sample flash image (byte k = chip address 0x400000 + k; tools/mkcps3.py puts it in SIMMs 3-6).
 stest.h: the samples' chip addresses and the schedule for src/stest.c. stest_writes.txt: the sound-register writes
@@ -175,7 +175,7 @@ def emit(out, name, S, E, end):
             else:
                 f.write(f'    {{{fr}, OP_KEYS, 0, {op[1]}, 0, 0, 0}},\n')
         f.write('};\n#define ST_OPS (sizeof st_ops / sizeof st_ops[0])\n')
-    # the register writes src/cps3s.c makes for the schedule
+    # the register writes sdk/src/cps3s.c makes for the schedule
     sw = lambda a: ((a >> 16) | (a << 16)) & 0xffffffff
     loop_lo = [0] * 16
     w = []

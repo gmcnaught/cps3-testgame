@@ -5,8 +5,15 @@
 #define CPS3V_INCLUDED
 #include <stdint.h>
 
-/* the screen, and sprite RAM layout used here: main list 0x0000-0x1fff, sublists from 0x2000, tilemaps in
-   4 KB units (64 x 64 cells of 4 bytes = 4 units each) from unit 0x40 (byte 0x40000) */
+/* the screen, and sprite RAM layout used here: main list 0x0000-0x1fff (at most CPS3V_MAIN_MAX records a frame; more
+   are dropped), the frame's sublists 0x2000-0x9fff (two 16 KB areas used in turn: 1,024 entries a frame; more are
+   dropped), prebuilt sublists CPS3V_PRE_A .. _A_END and CPS3V_PRE_B .. _B_END, tilemaps in 4 KB units (64 x 64 cells
+   of 4 bytes = 4 units each) from unit 0x40 (byte 0x40000) */
+#define CPS3V_MAIN_MAX  510
+#define CPS3V_PRE_A     0x0a000u                /* .. 0x3ffff */
+#define CPS3V_PRE_A_END 0x40000u
+#define CPS3V_PRE_B     0x54000u                /* after tilemap units 0x40-0x53 .. 0x7ffff */
+#define CPS3V_PRE_B_END 0x80000u
 #define CPS3V_W 384
 #define CPS3V_H 224
 #define CPS3V_MAP_UNIT(k) (0x40 + 4 * (k))     /* tilemap data k (0-15) */
@@ -45,6 +52,6 @@ void cps3v_vblank(void);
 void cps3v_text_init(void);
 void cps3v_text(int col, int row, const char *s);   /* row 0-27, col 0-47 */
 
-extern volatile uint32_t vbl_count;             /* src/crt0.S's VBlank handler counts here */
+extern volatile uint32_t vbl_count;             /* sdk/src/crt0.S's VBlank handler counts here */
 void cps3v_wait_vblank(void);
 #endif

@@ -1,14 +1,14 @@
 # CPS3 test game
 
-Six small homebrew programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
+Small homebrew test programs for Capcom's CPS3 arcade board. Each one draws a known picture (or plays a known
 sequence of sounds) built entirely from generated test data, and comes with the exact result it should produce. You
 can run them in MAME or on a MiSTer with the `jtcps3` core and compare, pixel for pixel or sample for sample.
 
 They are useful if you are:
 - **porting a game to the CPS3**: the programs show, in small readable C, how to boot your own code, load
   graphics (including by character DMA from the graphics flash, plain or run-length encoded), build the display list
-  and drive the sound chip. `src/cps3v.c` (video) and `src/cps3s.c` (sound) are
-  small libraries you can start from.
+  and drive the sound chip. They are built on the CPS3 SDK in `sdk/` (video, video DMA, sound, inputs, EEPROM,
+  timer, start-up code, build files; [docs/SDK.md](docs/SDK.md)), with a starter program in `examples/hello/`.
 - **working on a CPS3 emulator or FPGA core**: each test isolates one hardware feature, so a difference points at a
   specific feature rather than at "the game looks wrong".
 
@@ -191,6 +191,16 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and 
 | `btest` | 28 of 28 probes play block 0 (MAME reads only the start register); writes and audio exact | 28 of 28 probes play block 0 (by ear, 2026-10-02): none of the candidate registers moves the samples to SIMMs 4-6 |
 | `ttest` | Runs every test; MAME has no wait states, no load-use stall, and fixed DMA times (see docs/CPS3.md) | Runs every test, the same values in passes 2-15. Same clocks a frame as MAME; register instructions as the manual; loads and stores off the CPU 4.5-8.5 clocks (MAME 1); character DMA about 2.2 clocks a byte (1 MB: 2.28 M clocks), the status bit set 120-576 clocks after the start, clear and IRQ 10 together at the end |
 
+The test programs moved onto the SDK on 2026-10-03 (`cps3v_init` now accepts coins on the output port; each frame's
+sprite sublists alternate between two areas). All MAME checks give the same results since. On jtcps3 (`.rbf`
+2026-10-02, MiSTer .81, 2026-10-03) `vtest`, `vtest2`, `vtest3`, `dtest` and `dmap` were re-run on the SDK build and
+give the results in the table: `vtest` phases 0-4 within 0-9 pixels, phase 5 3,313; `vtest2` phases 0-4 and 8-10
+within 0-85 pixels, phases 5-7 the first 511 entries (8,330-8,336 / 3,091-3,099 pixels), phase 11 the old tiles
+(503-524 pixels against phase 3); `vtest3` phases 0-2 within 0-7 pixels, phases 3-4 3,468-3,469 pixels and exact
+with `PAD_TILES=64`; `dtest` 5 of 5 phases exact; `dmap` 10 of 10 steps. `dtest` and `dmap` wait for each DMA by its busy bit, which on jtcps3 comes
+up only after a delay (`ttest`), so there they move on before the DMA has run; their screens are taken frames later
+and stand.
+
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
 expands 5-bit colours to 8 bits as `v << 3 | v >> 2` (MAME uses `v << 3`), and its picture sits one pixel to the left
 of MAME's.
@@ -274,12 +284,10 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 
 | Path | What |
 |---|---|
-| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `dmap.c`, `stest.c` | The six test programs |
+| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `dmap.c`, `stest.c`, `atest.c`, `ftest.c`, `btest.c`, `ttest.c` | The test programs |
 | `src/ttest.c`, `ttest_k.S`, `tools/ttest.py`, `ttest_check.py`, `scripts/cps3_ttest.sh` | Timing test: program, timed loops, the test table, the comparison, the MAME run |
-| `src/cps3v.c`, `cps3v.h` | Video library: screen set-up, colours, tiles, tilemaps, display list (layers, sprites, records pointing at prebuilt piece lists), text layer |
-| `src/cps3s.c`, `cps3s.h` | Sound library: voice set-up, volume, pitch, key on/off |
-| `src/crt0.S` | Start-up code: the bus and cache set-up the real BIOS does (jtcps3 needs it), VBlank interrupt |
-| `src/link_simm.ld`, `link.ld` | Memory layout: program in SIMM 1 (as the games run), or all in the BIOS ROM |
+| `sdk/`, `docs/SDK.md` | The CPS3 SDK: `include/` and `src/` (video, video DMA, sound, inputs and EEPROM, timer, start-up code), linker scripts, `sdk.mk` (build rules for a program), `tools/cps3asset.py` (flash image) |
+| `examples/hello/` | A starter program built with the SDK |
 | `tools/vtest.py`, `vtest2.py`, `vtest3.py`, `dtest.py`, `dmap.py`, `stest.py` | Generate each test's data, and the expected screens or register writes |
 | `tools/mkcps3.py`, `mkmra3.py` | Build the MAME set, and the MiSTer zip and MRA |
 | `tools/imgdiff.py`, `vtest_check.py`, `dmap_check.py`, `stest_check.py` | Compare results: MAME snapshots, jtcps3 screenshots, sound |

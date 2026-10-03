@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPS3 video test scene (src/vtest.c, src/cps3v.c): writes the scene as a C header and the screen it should
+"""CPS3 video test scene (src/vtest.c, sdk/src/cps3v.c): writes the scene as a C header and the screen it should
 produce, composed here in screen coordinates without the CPS3's register formulas, so a MAME snapshot or a jtcps3
 screenshot that matches it checks cps3v.c's position, scroll, tile-order, flip and colour handling.
 

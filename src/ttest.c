@@ -188,7 +188,7 @@ static kfn locate(const struct tt *t)
 }
 
 /* -------- DMA -------- */
-extern volatile uint32_t irq10_n, irq10_frc;  /* src/crt0.S irq10: IRQ 10s taken, FRC at the last */
+extern volatile uint32_t irq10_n, irq10_frc;  /* sdk/src/crt0.S irq10: IRQ 10s taken, FRC at the last */
 
 /* CPU clocks from p (an FRC reading) until cond is false. FRC is read once every 2048 polls (well inside its 16-bit
    wrap) and the ticks summed: MAME's FRC (sh7604.cpp sh2_timer_resync) drops the clocks short of a tick at every read,
@@ -303,7 +303,7 @@ static void pdma(uint32_t n)
     dma_wait(4, p, &last_dma);
 }
 
-/* src/cps3v.c cps3v_vblank's sequence without the scroll writes; the display list stays empty */
+/* sdk/src/cps3v.c cps3v_vblank's sequence without the scroll writes; the display list stays empty */
 static uint32_t sdma(void)
 {
     uint32_t p = frc();
@@ -412,7 +412,7 @@ int main(void)
             show(i, v, tt_tests[i].kind);
         }
         if (cram_on) {
-            REG8(CCR) = 0x11;                 /* purge, four-way mode, cache on (src/crt0.S) */
+            REG8(CCR) = 0x11;                 /* purge, four-way mode, cache on (sdk/src/crt0.S) */
             cram_on = 0;
         }
         tt_res.pass++;

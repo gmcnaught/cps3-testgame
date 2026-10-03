@@ -1,4 +1,4 @@
-/* CPS3 video test 2 (tools/vtest2.py's scene, through src/cps3v.c): four tilemaps as bands back to front with
+/* CPS3 video test 2 (tools/vtest2.py's scene, through sdk/src/cps3v.c): four tilemaps as bands back to front with
    sprites between them in depth order, tiles in all 8 character RAM banks, colour codes up to 0x1ff; per phase the
    tilemaps' scrolls and a sprite set; at the start of the last phase part of character RAM and colour RAM is rewritten
    while the program runs (a port's room change), at the start of the last phase; the tiles and colours are read back

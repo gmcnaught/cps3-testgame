@@ -15,6 +15,7 @@
 #           (src/ftest.c, tools/ftest.py; tools/ftest_decode.py reads the codes from a recording)
 #   btest   sound bank probe: candidate registers written, then the start of the sample flash played: does any move
 #           the chip to SIMMs 4-6? (src/btest.c, tools/btest.py; tools/ftest_decode.py <wav> build/btest/btest_plays.txt)
+# The library they share is the SDK (sdk/, docs/SDK.md); examples/ builds programs with sdk/sdk.mk.
 # Build in the cps3-dev container (docker/Dockerfile):
 #   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make [vtest|vtest2|vtest3|dtest|stest]
 # CDEFS=-DFREEZE_AT=<frame> (vtest, vtest2, vtest3, dtest): from that frame the program writes nothing more to the video hardware
@@ -23,6 +24,7 @@
 # Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
 # samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
 PROGS  := vtest vtest2 vtest3 dtest dmap stest atest ftest btest ttest
+SDK_SRCS := $(addprefix sdk/src/,crt0.S cps3.c cps3v.c cps3dma.c cps3s.c cps3io.c)
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -fomit-frame-pointer -Wall -Wextra
 
 all: $(PROGS)
@@ -30,8 +32,8 @@ all: $(PROGS)
 $(PROGS):
 	@mkdir -p build/$@
 	python3 tools/$@.py build/$@
-	sh-elf-gcc $(CFLAGS) $(CDEFS) -Ibuild/$@ -Isrc -nostartfiles -T src/link_simm.ld -Wl,-Map,build/$@/main.map \
-	  -o build/$@/main.elf src/crt0.S src/$@.c $(wildcard src/$@_k.S) src/cps3v.c src/cps3s.c -lgcc
+	sh-elf-gcc $(CFLAGS) $(CDEFS) -Ibuild/$@ -Isrc -Isdk/include -nostartfiles -T sdk/link_simm.ld \
+	  -Wl,-Map,build/$@/main.map -o build/$@/main.elf src/$@.c $(wildcard src/$@_k.S) $(SDK_SRCS) -lgcc
 	sh-elf-objcopy -O binary -j .boot build/$@/main.elf build/$@/main.bin
 	sh-elf-objcopy -O binary -j .text -j .data build/$@/main.elf build/$@/simm1.bin
 	python3 tools/mkcps3.py build/$@/main.bin build/$@/mame build/$@/simm1.bin \

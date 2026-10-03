@@ -31,7 +31,7 @@ def classify(rgb, pal):
 
 
 def glyphs():
-    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'font.h')).read()
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sdk', 'src', 'font.h')).read()
     rows = re.findall(r'\{((?:0x[0-9a-f]{2},? ?){8})\}', src)
     return {chr(32 + k): [int(v, 16) for v in r.replace(' ', '').split(',') if v] for k, r in enumerate(rows)}
 

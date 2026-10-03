@@ -38,7 +38,8 @@ void cps3v_init(void)
     W16(PPU + 0x84, 0x0800);
     W16(PPU + 0x88, 0x0000);
     W16(PPU + 0x8e, 0x00a0);
-    W16(0x05000008, 0xc000);
+    W16(0x05000008, 0xc003);          /* output port: bits 0 / 1 coin 1 / 2 accepted (0: locked out, MAME cps3.cpp
+                                         outport_w; the BIOS writes 0xc000, which leaves coins locked out in MAME) */
     /* SS layer registers 0x00-0x14 (Red Earth's boot values), palette base 0xff: text colours from 0x1fe00 */
     static const uint8_t ss[] = { 0x2a, 0x3e, 0x00, 0x16, 0x02, 0xc6, 0x01, 0x00, 0x00, 0x03, 0x15, 0x00, 0xf6, 0x00,
                                   0x07, 0x01, 0x00, 0x00, 0xff, 0x03, 0x00 };
@@ -98,10 +99,17 @@ void cps3v_tilemap(int tm, int map_x, int map_y, uint32_t unit, int enable)
     W16(r + 8, unit & 0x7f);          /* line-scroll base (high byte) unused: line scroll off */
 }
 
+/* the frame's own sublists alternate between two 16 KB areas a frame (0x2000-0x5fff, 0x6000-0x9fff), so a list being
+   built never overwrites the one last sent (MAME's list DMA copies records and sublists, so MAME does not need it;
+   from maldita.castilla-cps3). Prebuilt sublists (cps3v_put / cps3v_object) live outside them: CPS3V_PRE_A, _B */
+static uint32_t sub_end;
 void cps3v_begin(void)
 {
+    static uint32_t odd;
+    odd ^= 1;
     main_n = 0;
-    sub_at = 0x2000;
+    sub_at = odd ? 0x6000 : 0x2000;
+    sub_end = sub_at + 0x4000;
     grp_n = 0;
     grp_at = sub_at;
 }
@@ -109,7 +117,7 @@ void cps3v_begin(void)
 /* closes the open group: a main-list record (global scroll 0, position 0, per-entry colour and depth) */
 static void group_close(void)
 {
-    if (!grp_n)
+    if (!grp_n || main_n >= CPS3V_MAIN_MAX)
         return;
     uint32_t m = SPR + main_n * 16;
     W32(m + 0, (grp_n << 16) | (grp_at >> 4));
@@ -126,6 +134,8 @@ static void entry(uint32_t v1, uint32_t v2, uint32_t v3)
 {
     if (grp_n == 511)                   /* a sublist holds at most 511 entries */
         group_close();
+    if (grp_at + (grp_n + 1) * 16 > sub_end)
+        return;                         /* the frame's sublist area is full: the entry is dropped */
     uint32_t e = SPR + grp_at + grp_n * 16;
     W32(e + 0, v1);
     W32(e + 4, v2);
@@ -181,12 +191,15 @@ void cps3v_put(uint32_t addr, int x, int y, int w, int h, uint32_t tile, uint32_
 void cps3v_object(uint32_t addr, uint32_t n, int x, int y, int pal)
 {
     group_close();
+    if (main_n >= CPS3V_MAIN_MAX)
+        return;
     uint32_t m = SPR + main_n * 16;
     W32(m + 0, (n << 16) | (addr >> 4));
     W32(m + 4, ((uint32_t)x & 0x3ff) << 16 | ((uint32_t)-y & 0x3ff));
     W32(m + 8, pal >= 0 ? 0x20000000u | ((uint32_t)pal & 0x1ff) << 16 : 0);
     W32(m + 12, 0);
     main_n++;
+    grp_at = sub_at;
 }
 
 void cps3v_group(void)

@@ -14,7 +14,7 @@ MAME). A clock count of a million or more is shown in thousands ("12345K"); a va
   op      CPU clocks per operation (32 in each loop iteration), the location's empty-loop cost subtracted, x 100
   cdma    character DMA (list command 0, length bytes, from the graphics flash), three rows from one transfer: CPU clocks
           from the start write (0x040c0098) until status 0x040c000c bit 1 is first seen set (SET), then seen clear
-          again (CLR), and until IRQ 10 is taken (IRQ: src/crt0.S irq10 reads FRC; IRL 10 unmasked during the wait)
+          again (CLR), and until IRQ 10 is taken (IRQ: sdk/src/crt0.S irq10 reads FRC; IRL 10 unmasked during the wait)
   pdma    palette DMA (length colours), as cdma with status bit 2 and the start write 0x040c00ae
   sdma    sprite-list DMA (empty list): CPU clocks from the first 8 / 9 write to 0x040c0082 until status bit 0 reads 0
   dmac    SH-2 DMAC channel 0 (auto request, bytes): CPU clocks from CHCR0 DE = 1 until TE = 1

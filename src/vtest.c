@@ -1,4 +1,4 @@
-/* CPS3 video test (tools/vtest.py's scene, through src/cps3v.c): colours, tiles and two tilemaps written by the
+/* CPS3 video test (tools/vtest.py's scene, through sdk/src/cps3v.c): colours, tiles and two tilemaps written by the
    CPU, the tilemaps drawn as bands, then sprites; tilemap 0's scroll changes every VT_PHASE_FRAMES frames. The
    screen of each phase is compared with tools/vtest.py's expect_<phase>.png (MAME snapshot, jtcps3 screenshot). */
 #include "cps3v.h"

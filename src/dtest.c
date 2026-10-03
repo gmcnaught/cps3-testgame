@@ -1,4 +1,4 @@
-/* CPS3 character DMA test (tools/dtest.py's scene, through src/cps3v.c): tiles copied from the graphics flash
+/* CPS3 character DMA test (tools/dtest.py's scene, through sdk/src/cps3v.c): tiles copied from the graphics flash
    (SIMM 3) into character RAM by the character DMA (list command 0, uncompressed) while the display runs, over tiles
    on screen, into tiles never drawn, one small copy a frame, and 1 MB in one record. The DMA list is written into
    character RAM at byte 0x1000 and started as Red Earth does (scripts/cps3_vlog.sh: 16-bit writes, 0x040c0096 = list

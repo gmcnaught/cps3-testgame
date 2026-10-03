@@ -72,7 +72,7 @@ trap:
     bra     trap
     nop
 
-/* VBlank: count it (_vbl_count, src/cps3v.h) and clear IRL 12 (any write to 0x05100000) */
+/* VBlank: count it (_vbl_count, sdk/include/cps3v.h) and clear IRL 12 (any write to 0x05100000) */
 irq:
     mov.l   r0, @-r15
     mov.l   r1, @-r15
@@ -120,6 +120,7 @@ irq10:
     rte
     nop
 
+    .comm   _vbl_count, 4, 4       /* a program may define vbl_count itself; this is the common one */
     .comm   _irq10_n, 4, 4
     .comm   _irq10_frc, 4, 4
 

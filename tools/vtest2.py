@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CPS3 video test 2 (src/vtest2.c, src/cps3v.c): the video features a game port uses, as a scene written as a C
+"""CPS3 video test 2 (src/vtest2.c, sdk/src/cps3v.c): the video features a game port uses, as a scene written as a C
 header and the screens it should produce, composed here in screen coordinates without the CPS3's register formulas.
 
     vtest2.py <out_dir>      -> <out_dir>/vtest2_scene.h, <out_dir>/expect_<phase>.png

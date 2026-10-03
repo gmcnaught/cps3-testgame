@@ -1,5 +1,5 @@
 /* CPS3 (SH-2) program run from the BIOS ROM (0x00000000, 512 KB; tools/mkcps3.py encrypts it),
-   work RAM is main RAM (0x02000000, 512 KB). src/link_simm.ld runs it from SIMM 1 instead, as the games do. */
+   work RAM is main RAM (0x02000000, 512 KB). sdk/link_simm.ld runs it from SIMM 1 instead, as the games do. */
 OUTPUT_FORMAT("elf32-sh")
 ENTRY(start)
 MEMORY

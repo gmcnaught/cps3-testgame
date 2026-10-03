@@ -20,7 +20,11 @@ unless marked inferred. Written while porting a game to the CPS3; the programs i
 - Reset must program the bus state controller as the BIOS does (BCR1 `0xa55a0020`, BCR2 `0xa55a00e8`, WCR
   `0xa55aaa57`; cache purged off, then on: CCR 0x10 / 0x11). Without it jtcps3 shows nothing; MAME runs anyway.
 - Text layer: SS RAM and colour RAM written as 32-bit words (the BIOS's widths); byte writes showed nothing on
-  jtcps3. Video registers: Red Earth's boot values (`cps3v_init` in `src/cps3v.c`).
+  jtcps3. Video registers: Red Earth's boot values (`cps3v_init` in `sdk/src/cps3v.c`). Since the SDK (2026-10-03)
+  `cps3v_init` writes the output port 0x05000008 = 0xc003 (coins accepted; the BIOS writes 0xc000, which MAME treats
+  as coins locked out) and builds each frame's sublists in two alternating areas (0x2000 / 0x6000); the MAME checks
+  give the same results. jtcps3 (`.rbf` 2026-10-02, .81) re-run on the SDK build: `vtest`, `vtest2`, `vtest3`,
+  `dtest` and `dmap` as recorded below (README "Results so far" has the pixel counts).
 - SH-2 RTE pops PC and SR before its delay slot runs: no stack pop in the slot.
 - VBlank = IRL 12, auto-vector 64-71; cleared by a write to 0x05100000.
 - Open: jtcps3 reset the program once after loading the SIMM set (a counter in uncleared RAM ran on past its end); cause unknown. Opening the OSD did not save the EEPROM as `.nvm`, for Red Earth either.
@@ -32,12 +36,16 @@ unless marked inferred. Written while porting a game to the CPS3; the programs i
   (`0x04` / `0x05`): reads of status or input through them can be stale once the cache is on (Inferred from SH-2
   cache rules; not yet seen).
 - Inputs: `0x25000000` system word (START 0x1000, coin, service, test), `0x25000002` P1 pad word (up 0x0001, down
-  0x0002, left 0x0004, right 0x0008, shot 1-6 from 0x0010), active low.
+  0x0002, left 0x0004, right 0x0008, shot 1-6 from 0x0010), active low. Corrected 2026-10-03 from MAME's port map
+  (cps3.cpp INPUTS / EXTRA; `sdk/src/cps3io.c`): the 32-bit word at 0x05000000 holds P1 up / down / left / right /
+  buttons 1-3 in bits 0-6 and P2's in bits 8-14, service 16, test 17, coin 1 / 2 24 / 25, P2 button 6 26, start 1 / 2
+  28 / 29; buttons 4-6 are at 0x05000004 (P1 bits 19 / 18 / 17, P2 4 / 5 bits 20 / 21), not in the pad word. Checked
+  in MAME for P1 right and button 1 (`examples/hello`); not on jtcps3 or a board.
 - Reset order: dispatch stubs from 0x400; cache-as-RAM routine at 0x534 writes `0xFFFFFE80 = 0xBD0F`,
   `0xFFFFFE90` (FMR) `= 2`, the bus controller, CCR; then DMA channel 0 (phase 2), a table of 96 register writes at
   0x61C (phase 3: PPU registers 0x240c0000-0xae, sound `0x240e0200`, `0x25000008 = 0xc000`, `0x25000a20-26`, SS
   registers, `0x25150002`), IRQ acks and `0x25150002 = 0x4642` (phase 4), RAM test, video RAM clears (phases 6-8).
-- The FMR / 0xFFFFFE80 writes (added to `src/crt0.S`) did not change the speed on jtcps3 (a CPU-bound
+- The FMR / 0xFFFFFE80 writes (added to `sdk/src/crt0.S`) did not change the speed on jtcps3 (a CPU-bound
   program from SIMM 1 took the same cycles and frames with and without them). That run did not repeat itself after loading (the
   earlier SIMM run did once); one run, so the cause of the repeat is still open.
 - C-BIOS claims (not checked here): colour RAM entry 0 is the backdrop colour on hardware; colour format BGR555.
@@ -99,7 +107,7 @@ register writes at the start of VBlank as Red Earth does.
 
 ## Video test: our own display list on MAME and jtcps3 (`make`, `scripts/cps3_vtest.sh`)
 
-`src/vtest.c` draws `tools/vtest.py`'s scene through `src/cps3v.c` (helpers a port can build on): colours and
+`src/vtest.c` draws `tools/vtest.py`'s scene through `sdk/src/cps3v.c` (helpers a port can build on): colours and
 16x16 8-bit tiles written by the CPU (colour RAM as 32-bit pairs, character RAM through the 0x04100000 bank window),
 two 64x64 tilemaps in sprite RAM drawn as bands of up to 128 lines, then sprites; six phases of 600 frames: three
 tilemap scrolls (including 440 px, past a 32-column wrap, and 1000/1000, past the map edges), every sprite size
@@ -223,9 +231,15 @@ How a program loads tiles while it runs, as the games do: the video chip copies 
 - Start: 16-bit writes 0x040c0096 = list word address (byte address / 4), 0x040c0098 = 0x0040 | address bits 16-21
   (MAME: bit 6 starts the list; Red Earth's value 0x0040). Busy: 0x040c000c bit 1 (read through the uncached
   mirror). End: IRQ 10, acknowledged by a write to 0x05110000; these programs mask IRL 10 (SR 0xa0) and poll.
+  Found later (`ttest`, 2026-10-03): on jtcps3 the busy bit comes up 120-576 CPU clocks after the start write, so
+  `dtest`'s and `dmap`'s poll returns at once there, before the DMA has run. Their results below stand: each is
+  judged on screens taken frames later (Inferred: their CPU read-backs, MAME only, would trail a jtcps3 DMA). A DMA
+  started while another still runs was not tested; `sdk/src/cps3dma.c` waits for IRQ 10 instead.
 - Byte order: DMA source byte a is byte a ^ 1 of the flash image as `tools/mkcps3.py` takes it (the sound chip reads
   byte a): measured in MAME, where a ^ 2 gave each 32-bit word's bytes reversed. Pixels land in character RAM in
-  order, left pixel first, as CPU-written tiles.
+  order, left pixel first, as CPU-written tiles. Palette DMA reads the same way: colour i of a source is image bytes
+  2i + 1 (bits 8-15) and 2i (bits 0-7) (measured in MAME by `examples/hello`, colour RAM read back; jtcps3 draws
+  the same colours). `sdk/tools/cps3asset.py` stores tiles and colours so.
 
 | Test | MAME 0.289 | jtcps3 (`.rbf` 2026-09-24) |
 |---|---|---|
@@ -240,7 +254,7 @@ now has one colour per pen.
 ## Sound (`make stest`, `scripts/cps3_stest.sh`)
 
 16 voices of signed 8-bit PCM read from the sample flash (SIMMs 3-6), no sound CPU (MAME `cps3_a.cpp`). Registers,
-32-bit, voice v at 0x040e0000 + 32 v (`src/cps3s.c` writes them through the cache-through mirror 0x240e0000):
+32-bit, voice v at 0x040e0000 + 32 v (`sdk/src/cps3s.c` writes them through the cache-through mirror 0x240e0000):
 
 | Register | Bits |
 |---|---|
@@ -289,7 +303,7 @@ sound register written as two 16-bit halves; register 0 always 0.
 high byte first). Instruction and memory rows: a loop of 32 copies of one operation, timed at n and 2n iterations
 (the call and timer reads cancel), minus the empty loop from the same code location, interrupts masked, median of 3.
 Character and palette DMA: three times from the start write, from one transfer: the status bit first seen set (SET),
-seen clear again (CLR), and IRQ 10 taken (IRQ; `src/crt0.S` `irq10` reads FRC, IRL 10 unmasked while waiting). Table,
+seen clear again (CLR), and IRQ 10 taken (IRQ; `sdk/src/crt0.S` `irq10` reads FRC, IRL 10 unmasked while waiting). Table,
 units and the manual's figures: `tools/ttest.py`, `tools/ttest_check.py`.
 
 | Rows | MAME 0.289 | jtcps3 (`.rbf` 2026-10-02) | SH7604 manual |
@@ -347,7 +361,7 @@ Observed in MAME's source (the copy in `../maldita.castilla-cps3/refs/cps3/mame/
   low (seen: one loop timing 12% low in one pass). `ttest` reads FRC once per 2,048 polls in its waits, and reads the
   high byte a second time, re-reading the low byte if it changed.
 
-Bus settings the program runs with (`src/crt0.S`, the BIOS's values; SH7604 hardware manual 7.2): BCR2 0x00e8 = area 3
+Bus settings the program runs with (`sdk/src/crt0.S`, the BIOS's values; SH7604 hardware manual 7.2): BCR2 0x00e8 = area 3
 (SIMM, 0x06000000) 32-bit, areas 1 (main RAM, 0x02000000) and 2 (video and I/O, 0x04000000-0x05ffffff) 16-bit; WCR
 0xaa57 = areas 1-3 one wait state with the external WAIT input on, area 0 (BIOS ROM) long wait, 2 idle cycles
 between areas. FMR is written 2 (x4 clock multiplication, hardware manual 3.2.5). So on the board a 32-bit load from

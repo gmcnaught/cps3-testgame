@@ -1,4 +1,4 @@
-/* CPS3 video test 3 (tools/vtest3.py's scene, through src/cps3v.c): objects as one main-list record each, pointing at
+/* CPS3 video test 3 (tools/vtest3.py's scene, through sdk/src/cps3v.c): objects as one main-list record each, pointing at
    sublists written once at the start (cps3v_put: as drawn and mirrored, low and high in sprite RAM) with the object's
    position and an optional colour code for all its pieces (cps3v_object); in the per-piece phases the same objects
    as entries of one record at position 0. Each phase's screen is compared with tools/vtest3.py's expect_<phase>.png
