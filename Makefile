@@ -22,7 +22,7 @@
 # effects of the per-frame writes.
 # Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
 # samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
-PROGS  := vtest vtest2 vtest3 dtest dmap stest atest ftest btest
+PROGS  := vtest vtest2 vtest3 dtest dmap stest atest ftest btest ttest
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -fomit-frame-pointer -Wall -Wextra
 
 all: $(PROGS)
@@ -31,7 +31,7 @@ $(PROGS):
 	@mkdir -p build/$@
 	python3 tools/$@.py build/$@
 	sh-elf-gcc $(CFLAGS) $(CDEFS) -Ibuild/$@ -Isrc -nostartfiles -T src/link_simm.ld -Wl,-Map,build/$@/main.map \
-	  -o build/$@/main.elf src/crt0.S src/$@.c src/cps3v.c src/cps3s.c -lgcc
+	  -o build/$@/main.elf src/crt0.S src/$@.c $(wildcard src/$@_k.S) src/cps3v.c src/cps3s.c -lgcc
 	sh-elf-objcopy -O binary -j .boot build/$@/main.elf build/$@/main.bin
 	sh-elf-objcopy -O binary -j .text -j .data build/$@/main.elf build/$@/simm1.bin
 	python3 tools/mkcps3.py build/$@/main.bin build/$@/mame build/$@/simm1.bin \

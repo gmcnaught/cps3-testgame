@@ -283,6 +283,81 @@ restart by key off -> on, key-on while on); the text layer names the scene.
 3rd Strike in MAME (`sfiii3n` attract, 240 s): 3,868 key-ons, every start below 7.6 MB of the sample flash; every
 sound register written as two 16-bit halves; register 0 always 0.
 
+## Timing (`make ttest`, `scripts/cps3_ttest.sh`; 2026-10-03)
+
+`src/ttest.c` times everything with the SH7604 free-running timer (FRC, phi / 8, its reset setting; byte reads,
+high byte first). Instruction and memory rows: a loop of 32 copies of one operation, timed at n and 2n iterations
+(the call and timer reads cancel), minus the empty loop from the same code location, interrupts masked, median of 3.
+Character and palette DMA: three times from the start write, from one transfer: the status bit first seen set (SET),
+seen clear again (CLR), and IRQ 10 taken (IRQ; `src/crt0.S` `irq10` reads FRC, IRL 10 unmasked while waiting). Table,
+units and the manual's figures: `tools/ttest.py`, `tools/ttest_check.py`.
+
+| Rows | MAME 0.289 | jtcps3 (`.rbf` 2026-10-02) | SH7604 manual |
+|---|---|---|---|
+| CPU clocks a frame | 419,433 (25 MHz / 59.6 Hz = 419,470) | 419,199 | - |
+| Empty loop (DT + BF taken) | 4 | 4 | 4 |
+| NOP, ADD, DIV1, BT not taken | 1 | 1 | 1 |
+| BRA + NOP, BF taken | 3 | 3 | 3 |
+| MUL.L, DMULS.L back to back / MULS.W | 2 / 1 | 6.37 / 1.96 | 2-4 / 1-3 |
+| Load + ADD not using it / using it | 2 / 2 | 3 / 3 | 2 / 3 (load-use slot, programming manual 7.5) |
+| Load from main RAM through the cache (hit after the first loop) | 1 | 1.50 | 1 |
+| Uncached 32-bit load: main RAM, sprite, colour, character, SS RAM, inputs / BIOS ROM / SIMM 1 / 16-bit PPU status | 1 | 7.50 / 8.50 / 4.50 / 4.50 | 1 + bus cycles |
+| 32-bit store, every area, cached address or not | 1 | 6.06 | 1 + bus cycles |
+| Character DMA 256 B: SET / CLR / IRQ | 72 / 2,616 / 2,512 | 576 / 1,256 / 952 | - |
+| Character DMA 4 KB | 56 / 2,560 / 2,512 | 120 / 9,104 / 9,032 | - |
+| Character DMA 64 KB | 56 / 2,560 / 2,512 | 128 / 142,648 / 142,584 | - |
+| Character DMA 1 MB | 56 / 2,560 / 2,512 | 128 / 2,277 K / 2,277 K (shown in thousands) | - |
+| Palette DMA 256 colours | 56 / 2,552 / 2,512 | 152 / 648 / 568 | - |
+| Palette DMA 8,192 colours | 56 / 2,552 / 2,512 | 128 / 14,456 / 14,384 | - |
+| Sprite-list DMA (empty list) | 120 | 712 | - |
+| DMAC 4 KB: burst / cycle steal / 16-byte units / from SIMM 1 | 2,072 / 2,072 / 152 / 2,072 | 13,808 / 13,344 / 3,168 / 10,424 | - |
+| Loads during a 1 MB character DMA (main RAM, sprite RAM) | 1 (DMA ended during the measurement) | 7.50, as without (DMA still running at the end) | - |
+| DMAs started with their status bit already set | 0 | 0 | - |
+| SIMM 1 past the cache: empty loop / NOP | 4 / 1 | 10 / 2.5 | - |
+| Cache RAM: empty loop / NOP / load / store | 4 / 1 / 1 / 1 | 4 / 1 / 1.5 / 1.5 | 1 |
+
+MAME: `scripts/cps3_ttest.sh`, passes 1, 2, 3 and 5 identical; its screen read back gives the same values as its
+RAM. jtcps3: 192.168.20.62, `scripts/mister_run.sh build/ttest/mame ttest "CPS3 timing test" 5 10`, shots of passes 2,
+6, 11 and 15, all 63 rows read; the values above are pass 2's, the others within 8-80 clocks of them (the instruction
+and memory rows identical).
+
+Inferred:
+
+- jtcps3's 2.6-3.0x slowdown against MAME (top of this file) is memory access, not the clock: the frame count is
+  within 0.06% of MAME's and register-only instructions take the manual's clocks, while every load or store off the
+  SH-2 costs 4.5-8.5 clocks and back-to-back 32-bit multiplies 6.4.
+- jtcps3 character DMA takes about 2.2 CPU clocks a byte (64 KB: 142,600; 1 MB: 2,277,000, 91 ms, 5.4 frames), with
+  a start cost under 1,000 clocks. The status bit comes up 120-576 clocks after the start write, then clears when IRQ
+  10 arrives (within 100 clocks). Palette DMA: about 1.75 clocks a colour. The CPU's loads ran at their usual speed
+  while a character DMA was running.
+- The first `ttest` version polled the status bit from the start write and took "clear" as the end. On jtcps3 the bit
+  is still clear for the first 120+ clocks, so it moved on at once and started the next DMA while the last still ran;
+  that run's later DMAs never reported done (status bit 1 set past 1.3 s each). The current version waits for IRQ 10
+  and saw no stuck bit in 15 passes. Not tested directly: starting a DMA while one runs.
+- MAME's DMA times are its constants (below), so for DMA only jtcps3 and the board can be compared.
+
+Observed in MAME's source (the copy in `../maldita.castilla-cps3/refs/cps3/mame/`):
+
+- `cps3.cpp` keeps the character and palette DMA status bits set for 100 us (2,500 clocks; IRQ 10 at the same time)
+  and the sprite-list bit for 4 us, "delay time is a hack" / "actual DMA speed is unknown".
+- No wait states and no cache (docs above); no load-use stall either (2 clocks where the manual gives 3).
+- The FRT: `sh7604.cpp` `sh2_timer_resync` sets the base to the current cycle and drops the clocks short of a full
+  tick at every read, so a loop reading FRC every 9 clocks counted 8 / 9 of the time; and `frc_r` serves each byte
+  read separately (no latch of the low byte), so a low byte that wraps between the two reads gives a value 256 ticks
+  low (seen: one loop timing 12% low in one pass). `ttest` reads FRC once per 2,048 polls in its waits, and reads the
+  high byte a second time, re-reading the low byte if it changed.
+
+Bus settings the program runs with (`src/crt0.S`, the BIOS's values; SH7604 hardware manual 7.2): BCR2 0x00e8 = area 3
+(SIMM, 0x06000000) 32-bit, areas 1 (main RAM, 0x02000000) and 2 (video and I/O, 0x04000000-0x05ffffff) 16-bit; WCR
+0xaa57 = areas 1-3 one wait state with the external WAIT input on, area 0 (BIOS ROM) long wait, 2 idle cycles
+between areas. FMR is written 2 (x4 clock multiplication, hardware manual 3.2.5). So on the board a 32-bit load from
+main RAM or video memory is two 16-bit bus cycles of at least 3 clocks each (Inferred from the register values; not
+measured; the clock ratio between the CPU and the bus is Unknown).
+
+The board: not run yet. The code-location rows run last because the fetch through 0x26000000 and from cache RAM
+depends on how the CPS3 decrypts those addresses; MAME decrypts by the address ANDed with 0xc7ffffff (SIMM) and by
+0xc0000000 + offset (cache RAM).
+
 ## Inferred, not tested
 
 Sound capacity: the sound chip addresses only SIMM 3's 16 MB (about 8.7 minutes of 8-bit PCM at 32 kHz), on the

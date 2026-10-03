@@ -153,6 +153,27 @@ candidate register, plays the start of block 0 and writes the register back to 0
 set to SIMM 4, 5 and 6, sound register 0x84 at 7 values, sound registers 0x81-0x83 and 0x85-0x87 at 2 values each,
 and voice register 0 at 5 values. 1 high 1 low = no effect.
 
+### `ttest`: timing
+
+How long things take, counted with the SH-2's own free-running timer (8 CPU clocks a tick), for comparison
+between MAME, jtcps3 and a real board. Results are shown on screen as each test finishes and the whole table runs
+again every pass:
+
+- CPU clocks a frame (does the CPU clock / frame rate ratio match?).
+- Clocks per instruction: NOP, ADD, DIV1, MUL.L, DMULS.L, MULS.W, a load with and without its result used next,
+  BRA, a taken and an untaken conditional branch. Each runs 32 times in a loop; the empty loop is subtracted.
+- Clocks per 32-bit load or store in each memory area: main RAM (through the cache and not), BIOS ROM, SIMM 1,
+  sprite RAM, colour RAM, character RAM, SS RAM, the video status register, the inputs.
+- Character DMA (256 B to 1 MB) and palette DMA (256 and 8,192 colours): clocks until the status bit is first seen
+  set, until it is seen clear again, and until the DMA-end interrupt (IRQ 10) arrives. Clocks until the sprite-list
+  copy reports done, and for 4 KB through the SH-2's own DMA controller (burst, cycle steal, 16-byte units, from SIMM 1).
+- Loads while a 1 MB character DMA runs (does the DMA slow the CPU?).
+- Last, code fetched past the cache from SIMM 1 and run from the SH-2's cache RAM. These can stop a board that
+  decrypts those fetches differently from MAME, so they come after everything else.
+
+The SH7604 manual's figures (no wait states) are listed next to the instruction rows by `tools/ttest_check.py`.
+Nothing here has been checked against a real board yet.
+
 ## Results so far
 
 MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and `dmap` on 2026-10-02).
@@ -168,6 +189,7 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and 
 | `atest` | Every register write and audio sample equal to MAME's model; 40 of 40 codes decoded. Plays blocks 16-63, which the hardware cannot address | Samples past 16 MB are read from 16 MB lower (by ear), as on the hardware; MAME's 64 MB is not |
 | `ftest` | ID, sums, erases and loads all as expected; 10 of 10 codes decoded as MAME's model predicts | `.rbf` 2026-10-02 (.62, screen only): sources in SIMMs 4 and 6 read right through the flash window; erase, program and plain writes all ignored (each sector still the original data after 10 s; every DIFF equals the difference between the untouched slot and its source). ID: 0404 / ADAD on the first run, the slot's data on the second |
 | `btest` | 28 of 28 probes play block 0 (MAME reads only the start register); writes and audio exact | 28 of 28 probes play block 0 (by ear, 2026-10-02): none of the candidate registers moves the samples to SIMMs 4-6 |
+| `ttest` | Runs every test; MAME has no wait states, no load-use stall, and fixed DMA times (see docs/CPS3.md) | Runs every test, the same values in passes 2-15. Same clocks a frame as MAME; register instructions as the manual; loads and stores off the CPU 4.5-8.5 clocks (MAME 1); character DMA about 2.2 clocks a byte (1 MB: 2.28 M clocks), the status bit set 120-576 clocks after the start, clear and IRQ 10 together at the end |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
 expands 5-bit colours to 8 bits as `v << 3 | v >> 2` (MAME uses `v << 3`), and its picture sits one pixel to the left
@@ -201,6 +223,7 @@ scripts/cps3_vtest.sh vtest3
 scripts/cps3_vtest.sh dtest
 scripts/cps3_dmap.sh                                       # one snapshot per step, the tiles drawn read off the screen
 scripts/cps3_stest.sh                                      # register writes and audio, compared with the schedule and chip model
+scripts/cps3_ttest.sh                                      # timing table: MAME's values and its screen read back
 mame sfiii3na -rompath build/vtest2/mame                   # just to watch one
 ```
 
@@ -224,6 +247,19 @@ and copies them back. `vtest_check.py` says which phase each screenshot shows an
 difference mask for each shot that is not exact. For `stest`, listen: the scene playing is named on screen, and
 `build/stest/run/model.wav` (written by the MAME check) is what it should sound like.
 
+For `ttest` on jtcps3: `scripts/mister_run.sh build/ttest/mame ttest "CPS3 timing test" 3 10`, then
+`python3 tools/ttest_check.py mame=build/ttest/run/mame.txt jtcps3=build/ttest/mister/shot_3.png` (the shot must show
+PASS 1 or more).
+
+### On a real board
+
+`build/ttest/mame/sfiii3na/` holds the BIOS ROM file (the program's start-up code, encrypted with 3rd Strike Asia
+NO CD's keys `a55432b4` / `0c129981`) and the SIMM 1 files (the program); the other SIMMs are blank. Run it on a
+board set up for that game, wait until the title line shows PASS 2 or more, and photograph the screen. Type the
+three columns into a text file one test a line, as shown (`LD MRAM    6.00`), and compare:
+`python3 tools/ttest_check.py mame=build/ttest/run/mame.txt board=board.txt`. A test that never finishes shows
+`NEVER`; if the board stops during the first pass, the first blank row is the test that stopped it.
+
 To check whether some effect comes from the program's per-frame updates, build with
 `make vtest2 CDEFS=-DFREEZE_AT=<frame>`: from that frame on the program stops writing to the video hardware.
 
@@ -239,6 +275,7 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 | Path | What |
 |---|---|
 | `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `dmap.c`, `stest.c` | The six test programs |
+| `src/ttest.c`, `ttest_k.S`, `tools/ttest.py`, `ttest_check.py`, `scripts/cps3_ttest.sh` | Timing test: program, timed loops, the test table, the comparison, the MAME run |
 | `src/cps3v.c`, `cps3v.h` | Video library: screen set-up, colours, tiles, tilemaps, display list (layers, sprites, records pointing at prebuilt piece lists), text layer |
 | `src/cps3s.c`, `cps3s.h` | Sound library: voice set-up, volume, pitch, key on/off |
 | `src/crt0.S` | Start-up code: the bus and cache set-up the real BIOS does (jtcps3 needs it), VBlank interrupt |

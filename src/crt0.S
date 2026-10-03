@@ -7,8 +7,12 @@
     .rept   60
     .long   trap                /* 4-63: exceptions */
     .endr
-    .rept   8
-    .long   irq                 /* 64-71: IRL auto-vectors (CPS3 VBlank = IRL 12); enabled by HW builds only */
+    .rept   5
+    .long   irq                 /* 64-68: IRL auto-vectors (vector 64 + level / 2) */
+    .endr
+    .long   irq10               /* 69: IRL 10-11 (CPS3 character / palette DMA end); masked unless SR allows it */
+    .rept   2
+    .long   irq                 /* 70-71: IRL 12-15 (CPS3 VBlank = IRL 12) */
     .endr
 
     .section .boot,"ax"
@@ -83,6 +87,42 @@ irq:
     rte                         /* pops PC and SR before its delay slot runs: nothing to pop in the slot */
     nop
 
+/* IRL 10 (DMA end): FRC at entry to _irq10_frc, _irq10_n counted, acknowledged at 0x05110000. FRC read as
+   src/ttest.c frc(): high, low, high again, and the low byte again if the high byte changed (MAME has no latch) */
+irq10:
+    mov.l   r0, @-r15
+    mov.l   r1, @-r15
+    mov.l   r2, @-r15
+    mov.l   r3, @-r15
+    mov.l   k_frc, r1
+    mov.b   @r1, r2
+    mov.b   @(1, r1), r0
+    mov.b   @r1, r3
+    cmp/eq  r2, r3
+    bt      1f
+    mov.b   @(1, r1), r0
+1:  extu.b  r3, r3
+    shll8   r3
+    extu.b  r0, r0
+    or      r3, r0
+    mov.l   k_i10frc, r1
+    mov.l   r0, @r1
+    mov.l   k_i10n, r1
+    mov.l   @r1, r2
+    add     #1, r2
+    mov.l   r2, @r1
+    mov.l   k_ack10, r1
+    mov.l   r2, @r1
+    mov.l   @r15+, r3
+    mov.l   @r15+, r2
+    mov.l   @r15+, r1
+    mov.l   @r15+, r0
+    rte
+    nop
+
+    .comm   _irq10_n, 4, 4
+    .comm   _irq10_frc, 4, 4
+
     .align  2
 k_stack:  .long __stack_top
 k_ccr:    .long 0xfffffe92
@@ -103,3 +143,7 @@ k_bend:   .long __bss_end
 k_main:   .long _main
 k_vbl:    .long _vbl_count
 k_ack12:  .long 0x05100000
+k_frc:    .long 0xfffffe12
+k_i10frc: .long _irq10_frc
+k_i10n:   .long _irq10_n
+k_ack10:  .long 0x05110000
