@@ -103,7 +103,8 @@ Each is measured by a test in this repository (README "Results so far", `docs/CP
   write (`ttest`). `cps3dma_char_run` and `cps3dma_palette` do this. Character DMA takes about 2.2 CPU clocks a byte
   on jtcps3 (1 MB: 91 ms, 5.4 frames); MAME takes a fixed 100 us whatever the size.
 - **jtcps3 draws at most 511 display-list entries a frame**, however they are grouped (`vtest2`); MAME draws more.
-- **6-bit colour sprites wider than 2 tiles** are drawn only 2 tiles wide on jtcps3 (`vtest`). Use 8-bit colour.
+- **6-bit colour sprites** (64-colour palettes) of every size, mirrored too, draw the right tiles on jtcps3 (`wtest`). An
+  earlier note against 4-wide 6-bit sprites was the CPU tile loss above (`vtest` phase 5 is exact with `PAD_TILES=64`).
 - **Sprites up to 4x4 tiles** (64x64) without zoom: size 8 is not usable (x size 0 is the tilemap command, y size 0
   draws nothing).
 - **Colours**: BGR555; jtcps3 expands 5 bits to 8 as `v << 3 | v >> 2`, MAME as `v << 3`. Colour 0 of the screen is
@@ -191,6 +192,12 @@ MAME: the sound chip reads byte a; the character DMA and the palette DMA read th
 
 ## Not in the SDK yet
 
+- Idea (pinned 2026-10-03): pad CPU tile uploads on jtcps3. After a CPU upload, write 64 blank tiles to a reserved
+  scratch range (e.g. tiles 32-95) so the last tiles written draw right (`vtest` phase 5, `vtest3` phases 3-4 exact
+  with `PAD_TILES=64`); on by default, off for the test programs so they keep showing the jtcps3 behaviour. It would
+  not fix the loss of the last 8 tiles of each 64-tile block written with the display on (`dmap` `cpu_on`): DMA stays
+  the way to load tiles then. Open: whether 8 tiles of padding are enough (one jtcps3 run of `vtest PAD_TILES=8`),
+  and whether this is jtcps3 only (to report to its developer with `vtest PAD_TILES` as the reproduction).
 - A real-board run of anything.
 - Graphics conversion from images (palette reduction, tiling), a tilemap / level format, run-length encoding as a
   library call (the encoder is in `tools/dmap.py`), sample conversion from WAV.

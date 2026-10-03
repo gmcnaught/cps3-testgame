@@ -23,7 +23,7 @@
 # effects of the per-frame writes.
 # Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
 # samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
-PROGS  := vtest vtest2 vtest3 dtest dmap stest atest ftest btest ttest
+PROGS  := vtest vtest2 vtest3 dtest dmap stest atest ftest btest ttest wtest
 SDK_SRCS := $(addprefix sdk/src/,crt0.S cps3.c cps3v.c cps3dma.c cps3s.c cps3io.c)
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -fomit-frame-pointer -Wall -Wextra
 

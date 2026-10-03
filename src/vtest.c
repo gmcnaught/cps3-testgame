@@ -14,6 +14,11 @@ static void scene_upload(void)
         pal_shadow[vt_colours[i] >> 16] = (uint16_t)vt_colours[i];
     cps3v_colours(0, pal_shadow, 0x600);
     cps3v_tiles(0, vt_tiles, VT_TILES);
+#ifdef PAD_TILES                              /* jtcps3 check: PAD_TILES unused tiles written after the scene's */
+    static const uint8_t pad[256];
+    for (uint32_t i = 0; i < PAD_TILES; i++)
+        cps3v_tiles(0x7f00 + i, pad, 1);
+#endif
     for (int k = 0; k < 2; k++)
         for (int r = 0; r < 64; r++)
             for (int c = 0; c < 64; c++) {

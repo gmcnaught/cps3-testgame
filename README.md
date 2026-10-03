@@ -153,6 +153,13 @@ candidate register, plays the start of block 0 and writes the register back to 0
 set to SIMM 4, 5 and 6, sound register 0x84 at 7 values, sound registers 0x81-0x83 and 0x85-0x87 at 2 values each,
 and voice register 0 at 5 values. 1 high 1 low = no effect.
 
+### `wtest`: which tile each cell of a sprite draws
+
+Every tile of character RAM 0x1000-0x3fff carries its own number (`dmap`'s labels), loaded by character DMA through
+the SDK; 6-bit colour sprites of 1, 2 and 4 tiles each way, some mirrored, and 8-bit 4-wide sprites as a control.
+`tools/wtest_check.py` reads the tile drawn in each 16x16 cell and prints, per sprite, OK or the grid of tiles read.
+Written to find the formula behind `vtest`'s wrong 4-wide 6-bit sprite on jtcps3; it found none (below).
+
 ### `ttest`: timing
 
 How long things take, counted with the SH-2's own free-running timer (8 CPU clocks a tick), for comparison
@@ -180,7 +187,7 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and 
 
 | Test | MAME | jtcps3 |
 |---|---|---|
-| `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: 6-bit colour sprites 4 tiles wide are drawn only 2 tiles wide |
+| `vtest` | All 6 phases exact | Phases 0-4 exact. Phase 5: the right half of the 4x4 6-bit sprite draws wrong. Not a 6-bit problem: those are the last 8 tiles the program writes by CPU, and with `PAD_TILES=64` (64 more tiles written after them) phase 5 is exact too, as in `vtest3` (`wtest`: 6-bit sprites of every size are exact) |
 | `vtest2` | All 12 phases exact | Phases 0-4 and 8-10 correct. Phases 5-7: only the first 511 display-list entries of a frame are drawn, however they are grouped (the 7 layer entries count; 504 of the sprites show). Phase 11: the replaced tiles do not appear (the old ones stay on screen), although reading them back gives the new data; the replaced colours do appear. To change tiles while the game runs, use character DMA (`dtest`, `dmap`): it works |
 | `vtest3` | All 5 phases exact | Phases 0-2 correct (records, positions, override, mirrored piece lists, 241 records). Phases 3-4: the last 7 tiles the program writes to character RAM (1,792 bytes) are not drawn as written: some draw nothing, one draws another tile's pixels. With `PAD_TILES=64` (64 more tiles written after them) both phases are exact. The port's wrong column was the same thing (its tile was 7th from the end of its upload). Phase 11 of `vtest2`, a short reload whose tiles never show, may be the same effect |
 | `dtest` | All 5 phases exact | All 5 phases exact: DMA over the tiles on screen, into fresh tiles, 16 tiles a frame, and 1 MB in one record across the bank boundary, all while the display runs. (A first version's colours repeated every 32 pens, so some phases' screens were identical and looked like failures) |
@@ -190,11 +197,12 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and 
 | `ftest` | ID, sums, erases and loads all as expected; 10 of 10 codes decoded as MAME's model predicts | `.rbf` 2026-10-02 (.62, screen only): sources in SIMMs 4 and 6 read right through the flash window; erase, program and plain writes all ignored (each sector still the original data after 10 s; every DIFF equals the difference between the untouched slot and its source). ID: 0404 / ADAD on the first run, the slot's data on the second |
 | `btest` | 28 of 28 probes play block 0 (MAME reads only the start register); writes and audio exact | 28 of 28 probes play block 0 (by ear, 2026-10-02): none of the candidate registers moves the samples to SIMMs 4-6 |
 | `ttest` | Runs every test; MAME has no wait states, no load-use stall, and fixed DMA times (see docs/CPS3.md) | Runs every test, the same values in passes 2-15. Same clocks a frame as MAME; register instructions as the manual; loads and stores off the CPU 4.5-8.5 clocks (MAME 1); character DMA about 2.2 clocks a byte (1 MB: 2.28 M clocks), the status bit set 120-576 clocks after the start, clear and IRQ 10 together at the end |
+| `wtest` | 16 of 16 sprites: every cell shows the tile asked for | 16 of 16 sprites, 6-bit sprites 1-4 tiles wide and high and mirrored included |
 
 The test programs moved onto the SDK on 2026-10-03 (`cps3v_init` now accepts coins on the output port; each frame's
 sprite sublists alternate between two areas). All MAME checks give the same results since. On jtcps3 (`.rbf`
 2026-10-02, MiSTer .81, 2026-10-03) `vtest`, `vtest2`, `vtest3`, `dtest` and `dmap` were re-run on the SDK build and
-give the results in the table: `vtest` phases 0-4 within 0-9 pixels, phase 5 3,313; `vtest2` phases 0-4 and 8-10
+give the results in the table: `vtest` phases 0-4 within 0-9 pixels, phase 5 3,313 (exact with `PAD_TILES=64`: the CPU tile loss, not 6-bit colour); `vtest2` phases 0-4 and 8-10
 within 0-85 pixels, phases 5-7 the first 511 entries (8,330-8,336 / 3,091-3,099 pixels), phase 11 the old tiles
 (503-524 pixels against phase 3); `vtest3` phases 0-2 within 0-7 pixels, phases 3-4 3,468-3,469 pixels and exact
 with `PAD_TILES=64`; `dtest` 5 of 5 phases exact; `dmap` 10 of 10 steps. `dtest` and `dmap` wait for each DMA by its busy bit, which on jtcps3 comes
@@ -234,6 +242,7 @@ scripts/cps3_vtest.sh dtest
 scripts/cps3_dmap.sh                                       # one snapshot per step, the tiles drawn read off the screen
 scripts/cps3_stest.sh                                      # register writes and audio, compared with the schedule and chip model
 scripts/cps3_ttest.sh                                      # timing table: MAME's values and its screen read back
+scripts/cps3_wtest.sh                                      # the tile drawn in each sprite cell, read off the screen
 mame sfiii3na -rompath build/vtest2/mame                   # just to watch one
 ```
 
@@ -284,7 +293,7 @@ SIMM 1, the sound samples in SIMMs 3-6, the rest blank. Nothing from the real ga
 
 | Path | What |
 |---|---|
-| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `dmap.c`, `stest.c`, `atest.c`, `ftest.c`, `btest.c`, `ttest.c` | The test programs |
+| `src/vtest.c`, `vtest2.c`, `vtest3.c`, `dtest.c`, `dmap.c`, `stest.c`, `atest.c`, `ftest.c`, `btest.c`, `ttest.c`, `wtest.c` | The test programs |
 | `src/ttest.c`, `ttest_k.S`, `tools/ttest.py`, `ttest_check.py`, `scripts/cps3_ttest.sh` | Timing test: program, timed loops, the test table, the comparison, the MAME run |
 | `sdk/`, `docs/SDK.md` | The CPS3 SDK: `include/` and `src/` (video, video DMA, sound, inputs and EEPROM, timer, start-up code), linker scripts, `sdk.mk` (build rules for a program), `tools/cps3asset.py` (flash image) |
 | `examples/hello/` | A starter program built with the SDK |

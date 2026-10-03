@@ -136,7 +136,13 @@ Measured on jtcps3 (Observed):
   and a flipped 4x2 sprite cut short; the repeat run with the same program matched. Unknown cause; `mister_run3.sh`
   now times out each command write.
 
-For a port: 8-bit colour only (6-bit sprites wider than 2 tiles differ on jtcps3); sprites up to 4x4 tiles (64x64;
+Correction (2026-10-03, `wtest`): the phase-5 difference is not 6-bit colour. The 4x4 6-bit sprite's right half is
+the last 8 tiles `vtest` writes by CPU; with `PAD_TILES=64` (64 more tiles written after them) phase 5 is exact on
+jtcps3 (.81, `.rbf` 2026-10-02: 0-1 pixels), the same loss of the last CPU-written tiles as `vtest3`. `wtest` draws
+6-bit sprites of 1, 2 and 4 tiles each way, mirrored too, from DMA-loaded labelled tiles: every cell the right tile on
+MAME and jtcps3.
+
+For a port: load tiles by DMA (or pad CPU uploads); 6-bit and 8-bit colour both work; sprites up to 4x4 tiles (64x64;
 x or y size 8 is not usable without zoom: x size 0 is the tilemap command, y size 0 draws nothing); pick each
 colour's 5-bit value against jtcps3's expansion.
 
@@ -213,6 +219,17 @@ Observed on jtcps3, not explained (the jtcps3 HDL was not read):
   `user_io_screenshot` -> `mister_scaler_read_32`, no filtering), and every frame of a frozen screen should be the
   same, so the frames written to that buffer differ: jtcps3's video output, or the scaler's sampling of it, is one
   pixel early on some frames (Inferred; which of the two is Unknown).
+
+## Sprite cells (`make wtest`, `scripts/cps3_wtest.sh`; 2026-10-03)
+
+`src/wtest.c` (on the SDK): character RAM tiles 0x1000-0x3fff each labelled with their own number (pens 1 / 2, read
+the same in a 6-bit and an 8-bit palette), loaded by three 1 MB character DMA records; 16 sprites on a 16-pixel grid:
+6-bit 1x1, 1x2, 1x4, 2x1, 2x2, 2x4, 4x1, 4x2, 4x4, mirrored 4x2, 2x2 and 4x4; 8-bit 4x1, 4x2, 4x4 and mirrored 4x4.
+`tools/wtest_check.py` decodes the label in every cell.
+
+| | MAME 0.289 | jtcps3 (`.rbf` 2026-10-02, .81) |
+|---|---|---|
+| Tile in each cell = base + column x height + row (mirrored: columns reversed) | 16 of 16 sprites | 16 of 16 sprites |
 
 ## Character DMA (`make dtest`, `make dmap`; 2026-10-02)
 
