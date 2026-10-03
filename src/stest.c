@@ -32,6 +32,12 @@ static void op_run(const struct st_op *o)
     case OP_KEYS:
         cps3s_keys((uint16_t)o->a);
         break;
+    case OP_POKE:                       /* tools/btest.py: a register write, through the cache-through mirror */
+        if (o->v == 16)
+            *(volatile uint16_t *)((uint32_t)o->a | 0x20000000u) = (uint16_t)o->b;
+        else
+            *(volatile uint32_t *)((uint32_t)o->a | 0x20000000u) = (uint32_t)o->b;
+        break;
     }
 }
 

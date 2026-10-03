@@ -125,7 +125,33 @@ screen shows the address and the code to expect. `make atest CDEFS=-DREG84=0x002
 
 Result on jtcps3 (`.rbf` 2026-09-24, heard on a MiSTer): the low beeps always right, the high beeps only 1 or 2:
 the chip reads offset mod 16 MB (SIMM 3 only), on both voices, with or without register 0x84. MAME reads all 64 MB.
-Commercial games keep their samples low (3rd Strike: below 7.6 MB).
+The CPS3 hardware has the same 16 MB limit (validated outside this repo, 2026-10-03): jtcps3 is correct here and
+MAME is more permissive than the board. Commercial games keep their samples low (3rd Strike: below 7.6 MB).
+
+### `ftest`: loading sounds into the sample memory while running
+
+Whether a program can rewrite part of SIMM 3 while it runs and have the sound chip play the new bytes: the way a
+game whose music does not fit in the 16 MB the sound chip can address would keep its effects resident and copy each
+stage's music into SIMM 3 from SIMMs 4-6. The program reads the flash chips' ID, sums two sources (SIMM 4 and SIMM
+6) read through the flash window, erases one 128 KB sector of SIMM 3 and copies a source into it with flash program
+commands (twice into the same slot, once into a slot in the second half of a chip pair), and finally copies one with
+plain writes. Between the steps it plays the slots and the resident sample as `atest`'s beep codes; the screen lists
+each step's result (frames taken, failed programs, halfwords that differ) and each play with the code expected if
+the loads work and the code MAME plays. `make ftest CDEFS=-DNO_CEWE` leaves out the BIOS's chip and write enable
+writes (0x07ff000c / 0x07ff0048). `tools/ftest_decode.py <wav>` reads the codes back from a recording.
+
+MAME: ID 0404 / ADAD (Fujitsu 29F016A), both sums right, each erase 59 frames with every halfword 0xFFFF after,
+each load 1-3 frames with no failures or differences, the slots play the loaded codes and the resident sample is
+unchanged. Two results are MAME's model rather than hardware: an erased slot still plays its old code (MAME's sample
+copy is refreshed only where the program writes), and the plain writes change some bytes (MAME's flash model takes
+data bytes such as 0x10 / 0x40 / 0x90 as Intel commands).
+
+### `btest`: sound bank probe
+
+Whether any register moves the sound chip to SIMMs 4-6. On `atest`'s sample flash, each of 28 probes writes one
+candidate register, plays the start of block 0 and writes the register back to 0: the flash bank register 0x040c0088
+set to SIMM 4, 5 and 6, sound register 0x84 at 7 values, sound registers 0x81-0x83 and 0x85-0x87 at 2 values each,
+and voice register 0 at 5 values. 1 high 1 low = no effect.
 
 ## Results so far
 
@@ -139,7 +165,9 @@ MAME 0.289 and `jtcps3.rbf` dated 2026-09-24 (beta), on 2026-10-01 (`dtest` and 
 | `dtest` | All 5 phases exact | All 5 phases exact: DMA over the tiles on screen, into fresh tiles, 16 tiles a frame, and 1 MB in one record across the bank boundary, all while the display runs. (A first version's colours repeated every 32 pens, so some phases' screens were identical and looked like failures) |
 | `dmap` | All 10 steps as expected | All 10 steps as expected: uncompressed DMA twice over the tiles on screen and into fresh tiles, run-length DMA twice in 6bpp (command 2) and twice in 8bpp (command 3, pens 0x9a / 0xe5, table pairs), CPU writes and a DMA with the display list empty. With the display on, CPU writes are partly lost: in each 64-tile block the last 8 tiles keep their old pixels (`DMAP_STEPS=boot,cpu_on,over1`: 280 of 312 cells); the next DMA replaces them all |
 | `stest` | Exact: every register write and every audio sample | Runs and shows each scene; the audio has not been recorded or compared yet |
-| `atest` | Exact: every register write and every audio sample; 40 of 40 codes decoded | Samples past 16 MB are read from 16 MB lower (by ear) |
+| `atest` | Every register write and audio sample equal to MAME's model; 40 of 40 codes decoded. Plays blocks 16-63, which the hardware cannot address | Samples past 16 MB are read from 16 MB lower (by ear), as on the hardware; MAME's 64 MB is not |
+| `ftest` | ID, sums, erases and loads all as expected; 10 of 10 codes decoded as MAME's model predicts | `.rbf` 2026-10-02 (.62, screen only): sources in SIMMs 4 and 6 read right through the flash window; erase, program and plain writes all ignored (each sector still the original data after 10 s; every DIFF equals the difference between the untouched slot and its source). ID: 0404 / ADAD on the first run, the slot's data on the second |
+| `btest` | 28 of 28 probes play block 0 (MAME reads only the start register); writes and audio exact | 28 of 28 probes play block 0 (by ear, 2026-10-02): none of the candidate registers moves the samples to SIMMs 4-6 |
 
 "Correct" on jtcps3 allows for two known, consistent differences that `tools/vtest_check.py` corrects for: jtcps3
 expands 5-bit colours to 8 bits as `v << 3 | v >> 2` (MAME uses `v << 3`), and its picture sits one pixel to the left
@@ -166,7 +194,7 @@ More detail, and everything measured about the CPS3 video and sound hardware so 
 ### In MAME
 
 ```sh
-docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make    # builds all six into build/<test>/
+docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make    # builds them all into build/<test>/
 scripts/cps3_vtest.sh vtest                                # one snapshot per phase, compared with the expected screens
 scripts/cps3_vtest.sh vtest2
 scripts/cps3_vtest.sh vtest3

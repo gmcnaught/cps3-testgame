@@ -72,7 +72,8 @@ def layout(S):
 
 def schedule():
     """[(frame, op, args)]: ('scene', text), ('voice', v, sample, step, vol_l, vol_r), ('vol', v, l, r),
-    ('step', v, step), ('keys', mask), in program order within a frame"""
+    ('step', v, step), ('keys', mask), ('poke', bits, addr, value) (a 16- or 32-bit write; tools/btest.py), in program
+    order within a frame"""
     E = []
 
     def at(f, *op):
@@ -156,7 +157,7 @@ def emit(out, name, S, E, end):
             f.write(f'    {{0x{s:x}, 0x{e:x}, 0x{lp:x}, {int(on)}}},   /* {n} */\n')
         f.write('};\n')
         f.write('static const char *const st_scenes[] = {\n' + ''.join(f'    "{t}",\n' for t in scenes) + '};\n')
-        f.write('enum { OP_SCENE, OP_VOICE, OP_VOL, OP_STEP, OP_KEYS };\n')
+        f.write('enum { OP_SCENE, OP_VOICE, OP_VOL, OP_STEP, OP_KEYS, OP_POKE };\n')
         f.write('static const struct st_op { uint16_t frame; uint8_t op, v; int32_t a, b, c, d; } st_ops[] = {\n')
         sc = 0
         for fr, op in E:
@@ -169,6 +170,8 @@ def emit(out, name, S, E, end):
                 f.write(f'    {{{fr}, OP_VOL, {op[1]}, {op[2]}, {op[3]}, 0, 0}},\n')
             elif op[0] == 'step':
                 f.write(f'    {{{fr}, OP_STEP, {op[1]}, {op[2]}, 0, 0, 0}},\n')
+            elif op[0] == 'poke':
+                f.write(f'    {{{fr}, OP_POKE, {op[1]}, 0x{op[2]:08x}, 0x{op[3]:08x}, 0, 0}},\n')
             else:
                 f.write(f'    {{{fr}, OP_KEYS, 0, {op[1]}, 0, 0, 0}},\n')
         f.write('};\n#define ST_OPS (sizeof st_ops / sizeof st_ops[0])\n')
@@ -189,6 +192,8 @@ def emit(out, name, S, E, end):
             w.append((fr, 8 * op[1] + 3, op[2] << 16 | loop_lo[op[1]]))
         elif op[0] == 'keys':
             w.append((fr, 0x80, op[1] << 16))
+        elif op[0] == 'poke' and 0x040e0000 <= op[2] < 0x040e0300:
+            w.append((fr, (op[2] - 0x040e0000) // 4, op[3]))
     with open(os.path.join(out, f'{name}_writes.txt'), 'w') as f:
         f.write(''.join(f'{fr} {o} {d:08x}\n' for fr, o, d in w))
     print(f'{out}: {len(names)} samples, {len(img)} bytes of sample flash, {len(E)} operations, {len(w)} writes')

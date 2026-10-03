@@ -11,6 +11,10 @@
 #   stest   sound: the 16 PCM voices (src/stest.c, tools/stest.py)
 #   atest   sound addressing: a beep code per 1 MB block of the sample flash, played block by block (src/atest.c,
 #           tools/atest.py)
+#   ftest   flash sound load: part of SIMM 3 erased and reprogrammed from SIMMs 4 and 6 while running, then played
+#           (src/ftest.c, tools/ftest.py; tools/ftest_decode.py reads the codes from a recording)
+#   btest   sound bank probe: candidate registers written, then the start of the sample flash played: does any move
+#           the chip to SIMMs 4-6? (src/btest.c, tools/btest.py; tools/ftest_decode.py <wav> build/btest/btest_plays.txt)
 # Build in the cps3-dev container (docker/Dockerfile):
 #   docker run --rm -v "$PWD":/p -w /p cps3-dev:latest make [vtest|vtest2|vtest3|dtest|stest]
 # CDEFS=-DFREEZE_AT=<frame> (vtest, vtest2, vtest3, dtest): from that frame the program writes nothing more to the video hardware
@@ -18,7 +22,7 @@
 # effects of the per-frame writes.
 # Output per program P: build/P/mame/sfiii3na/ (a MAME stand-in set) and what tools/P.py writes (expected screens,
 # samples). scripts/cps3_vtest.sh P and scripts/cps3_stest.sh check them in MAME; scripts/mister_run.sh on jtcps3.
-PROGS  := vtest vtest2 vtest3 dtest dmap stest atest
+PROGS  := vtest vtest2 vtest3 dtest dmap stest atest ftest btest
 CFLAGS := -m2 -mb -O2 -ffreestanding -fno-builtin -nostdlib -fomit-frame-pointer -Wall -Wextra
 
 all: $(PROGS)
